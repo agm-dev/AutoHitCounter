@@ -635,5 +635,71 @@ public class MainViewModelTests
             90000L);
     }
 
+    [Fact]
+    public void ResetCommand_ClearsIgtOffset()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _sut.ResetIgtCommand.Execute(null);
+        Assert.True(_sut.HasIgtOffset);
+
+        _sut.ResetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+    }
+
+    [Fact]
+    public void ResetCommand_IgtAdvancesFromZeroWithoutStaleOffset()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _sut.ResetIgtCommand.Execute(null);
+
+        _sut.ResetCommand.Execute(null);
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(5000L);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(5000), _sut.InGameTime);
+    }
+
+    [Fact]
+    public void SwitchingProfile_ResetsStaleOffsetFromPreviousProfile()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _sut.ResetIgtCommand.Execute(null);
+        Assert.True(_sut.HasIgtOffset);
+
+        var other = new Profile
+        {
+            Name = "Other",
+            Splits = new List<SplitEntry> { new SplitEntry { Name = "Boss", Type = SplitType.Child } }
+        };
+        _sut.ActiveProfile = other;
+
+        Assert.False(_sut.HasIgtOffset);
+    }
+
+    [Fact]
+    public void SwitchingAwayFromProfile_CapturesOffsetInSnapshot()
+    {
+        var profile = SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _sut.ResetIgtCommand.Execute(null);
+
+        var other = new Profile
+        {
+            Name = "Other",
+            Splits = new List<SplitEntry> { new SplitEntry { Name = "Boss", Type = SplitType.Child } }
+        };
+        _sut.ActiveProfile = other;
+
+        _runStateService.Received().Capture(
+            Arg.Any<System.Collections.Generic.IList<SplitViewModel>>(),
+            Arg.Any<SplitViewModel>(),
+            Arg.Any<bool>(),
+            Arg.Any<TimeSpan>(),
+            90000L);
+    }
+
     #endregion
 }

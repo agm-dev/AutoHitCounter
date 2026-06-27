@@ -59,12 +59,12 @@ public class RunStateService : IRunStateService
             _profileService.SaveProfile(profile);
     }
 
-    public RunSnapshot Capture(IList<SplitViewModel> splits, SplitViewModel currentSplit, bool isRunComplete, TimeSpan inGameTime)
+    public RunSnapshot Capture(IList<SplitViewModel> splits, SplitViewModel currentSplit, bool isRunComplete, TimeSpan inGameTime, long igtOffsetMs = 0)
     {
         var children = splits.Where(s => s.Type == SplitType.Child).ToList();
         var hits = children.Select(s => s.NumOfHits).ToArray();
         var index = currentSplit != null ? splits.IndexOf(currentSplit) : -1;
-        return new RunSnapshot(index, hits, isRunComplete, inGameTime);
+        return new RunSnapshot(index, hits, isRunComplete, inGameTime, igtOffsetMs);
     }
 
     public SplitViewModel RestoreSnapshot(IList<SplitViewModel> splits, RunSnapshot snapshot)

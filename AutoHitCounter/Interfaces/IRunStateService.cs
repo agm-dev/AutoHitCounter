@@ -12,7 +12,7 @@ public interface IRunStateService
     void SaveRunState(Profile profile, IList<SplitViewModel> splits, SplitViewModel currentSplit, bool isRunComplete, TimeSpan inGameTime, long igtOffsetMs = 0);
     void CancelPendingSave();
     void FlushRunState(Profile profile);
-    RunSnapshot Capture(IList<SplitViewModel> splits, SplitViewModel currentSplit, bool isRunComplete, TimeSpan inGameTime);
+    RunSnapshot Capture(IList<SplitViewModel> splits, SplitViewModel currentSplit, bool isRunComplete, TimeSpan inGameTime, long igtOffsetMs = 0);
     SplitViewModel RestoreSnapshot(IList<SplitViewModel> splits, RunSnapshot snapshot);
     SplitViewModel RestoreFromSavedRun(IList<SplitViewModel> splits, RunState state);
     void Save(string gameName, string profileName, RunSnapshot snapshot);

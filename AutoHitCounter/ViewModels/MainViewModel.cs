@@ -192,7 +192,7 @@ namespace AutoHitCounter.ViewModels
 
                 if (_activeProfile != null)
                     _runStateService.Save(_selectedGame?.GameName, _activeProfile.Name,
-                        _runStateService.Capture(Splits, CurrentSplit, IsRunComplete, InGameTime));
+                        _runStateService.Capture(Splits, CurrentSplit, IsRunComplete, InGameTime, _igtOffsetMs));
 
                 SetProperty(ref _selectedGame, value);
                 _activeProfile = null;
@@ -285,7 +285,7 @@ namespace AutoHitCounter.ViewModels
 
                 if (_activeProfile != null)
                     _runStateService.Save(_selectedGame?.GameName, _activeProfile.Name,
-                        _runStateService.Capture(Splits, CurrentSplit, IsRunComplete, InGameTime));
+                        _runStateService.Capture(Splits, CurrentSplit, IsRunComplete, InGameTime, _igtOffsetMs));
 
                 SetProperty(ref _activeProfile, value);
 
@@ -1116,6 +1116,7 @@ namespace AutoHitCounter.ViewModels
         {
             _runStateService.CancelPendingSave();
             IsRunComplete = false;
+            _igtOffsetMs = 0L;
             UpdateSplits();
             if (profile != null && _runStateService.TryGet(_selectedGame?.GameName, profile.Name, out var snapshot))
                 RestoreSnapshot(snapshot);
@@ -1124,6 +1125,7 @@ namespace AutoHitCounter.ViewModels
             else
                 _splitNav.InitFresh();
 
+            OnPropertyChanged(nameof(HasIgtOffset));
             OnPropertyChanged(nameof(CurrentSplit));
             OnPropertyChanged(nameof(CurrentSplitNumber));
             OnPropertyChanged(nameof(IsRunComplete));
@@ -1138,6 +1140,7 @@ namespace AutoHitCounter.ViewModels
         {
             var toRestore = _runStateService.RestoreSnapshot(Splits, snapshot);
             _splitNav.SetPosition(toRestore, snapshot.IsRunComplete);
+            _igtOffsetMs = snapshot.IgtOffsetMs;
             InGameTime = snapshot.InGameTime;
         }
 
@@ -1146,7 +1149,6 @@ namespace AutoHitCounter.ViewModels
             var toRestore = _runStateService.RestoreFromSavedRun(Splits, state);
             _splitNav.SetPosition(toRestore, state.IsRunComplete);
             _igtOffsetMs = state.IgtOffsetMilliseconds;
-            OnPropertyChanged(nameof(HasIgtOffset));
             InGameTime = TimeSpan.FromMilliseconds(state.IgtMilliseconds);
         }
 
@@ -1174,6 +1176,10 @@ namespace AutoHitCounter.ViewModels
             _splitNav.InitFresh();
 
             _orchestrator.ManualReset();
+
+            _rawIgtMs = 0L;
+            _igtOffsetMs = 0L;
+            OnPropertyChanged(nameof(HasIgtOffset));
 
             InGameTime = TimeSpan.Zero;
             InGameTimeFormatted = "0:00:00";
