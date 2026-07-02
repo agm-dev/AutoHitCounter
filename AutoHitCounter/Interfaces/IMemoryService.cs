@@ -13,6 +13,7 @@ namespace AutoHitCounter.Interfaces
         int ModuleMemorySize { get; }
         
         byte[] ReadBytes(nint addr, int size);
+        nint FindPattern(string pattern);
         T Read<T>(nint addr) where T : unmanaged;
         nint FollowPointers64(nint baseAddress, int[] offsets, bool readFinalPtr);
         nint FollowPointers32(nint baseAddress, int[] offsets, bool readFinalPtr);

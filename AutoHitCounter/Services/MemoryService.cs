@@ -94,6 +94,103 @@ namespace AutoHitCounter.Services
             Kernel32.WriteProcessMemory(ProcessHandle, addr, val, val.Length, 0);
         }
 
+        private const uint PageGuard = 0x100;
+
+        /// <summary>
+        /// Scans the target process' main module for an array-of-bytes signature and returns the
+        /// absolute address of the first match, or <see cref="IntPtr.Zero"/> if not found.
+        /// Pattern is space separated hex bytes, with "??" (or "?") marking a wildcard byte,
+        /// e.g. "E8 ?? ?? ?? ?? F3 0F 11 43 18 48 8B C3".
+        /// </summary>
+        public nint FindPattern(string pattern)
+        {
+            if (ProcessHandle == IntPtr.Zero || BaseAddress == IntPtr.Zero)
+                return IntPtr.Zero;
+
+            byte?[] parsed = ParsePattern(pattern);
+            if (parsed.Length == 0)
+                return IntPtr.Zero;
+
+            nint moduleEnd = BaseAddress + ModuleMemorySize;
+            int mbiSize = Marshal.SizeOf<Kernel32.MemoryBasicInformation>();
+
+            nint current = BaseAddress;
+            while (current < moduleEnd)
+            {
+                if (Kernel32.VirtualQueryEx(ProcessHandle, current, out var mbi, (uint)mbiSize) == 0)
+                    break;
+
+                long regionSize = (long)mbi.RegionSize;
+                if (regionSize <= 0)
+                    break;
+
+                if (mbi.State == Kernel32.MemCommit && IsReadable(mbi.Protect))
+                {
+                    long readSize = regionSize;
+                    if ((long)current + readSize > (long)moduleEnd)
+                        readSize = (long)moduleEnd - (long)current;
+
+                    if (readSize > 0)
+                    {
+                        byte[] buffer = ReadBytes(current, (int)readSize);
+                        int idx = IndexOfPattern(buffer, parsed);
+                        if (idx >= 0)
+                            return current + idx;
+                    }
+                }
+
+                current = (nint)((long)mbi.BaseAddress + regionSize);
+            }
+
+            return IntPtr.Zero;
+        }
+
+        private static bool IsReadable(uint protect)
+        {
+            if ((protect & PageGuard) != 0)
+                return false;
+
+            uint p = protect & 0xFF;
+            // PAGE_READONLY / PAGE_READWRITE / PAGE_WRITECOPY / PAGE_EXECUTE_READ /
+            // PAGE_EXECUTE_READWRITE / PAGE_EXECUTE_WRITECOPY
+            return p is 0x02 or 0x04 or 0x08 or 0x20 or 0x40 or 0x80;
+        }
+
+        private static byte?[] ParsePattern(string pattern)
+        {
+            var tokens = pattern.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var result = new byte?[tokens.Length];
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                var token = tokens[i];
+                result[i] = token is "??" or "?" ? null : Convert.ToByte(token, 16);
+            }
+
+            return result;
+        }
+
+        private static int IndexOfPattern(byte[] buffer, byte?[] pattern)
+        {
+            int limit = buffer.Length - pattern.Length;
+            for (int i = 0; i <= limit; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < pattern.Length; j++)
+                {
+                    if (pattern[j].HasValue && buffer[i + j] != pattern[j].Value)
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match)
+                    return i;
+            }
+
+            return -1;
+        }
+
         public IntPtr AllocCustomCodeMem()
         {
             nint searchRangeStart = BaseAddress - CodeCaveSearchStart;
