@@ -23,6 +23,7 @@ public class MainViewModelTests
     private readonly IGameSessionOrchestrator _orchestrator = Substitute.For<IGameSessionOrchestrator>();
     private readonly IRunStateService _runStateService = Substitute.For<IRunStateService>();
     private readonly ICustomGameService _customGameService = Substitute.For<ICustomGameService>();
+    private readonly ITwitchCategoryService _twitchCategoryService = Substitute.For<ITwitchCategoryService>();
 
     private readonly MainViewModel _sut;
 
@@ -35,7 +36,7 @@ public class MainViewModelTests
         _sut = new MainViewModel(
             _hotkeyManager, _gameModuleFactory, _profileService, _stateService,
             null, null, _overlayServerService, _splitNav, _externalIntegration,
-            _orchestrator, _runStateService, _customGameService);
+            _orchestrator, _runStateService, _customGameService, _twitchCategoryService);
     }
 
     private SplitViewModel AddChildSplit(string name = "Boss", int hits = 0, int pb = 0)

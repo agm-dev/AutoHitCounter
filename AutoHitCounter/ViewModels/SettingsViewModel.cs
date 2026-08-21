@@ -2,12 +2,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using AutoHitCounter.Core;
 using AutoHitCounter.Enums;
 using AutoHitCounter.Interfaces;
+using AutoHitCounter.Models;
+using AutoHitCounter.Models.Twitch;
 using AutoHitCounter.Services;
+using AutoHitCounter.Services.Twitch;
 using AutoHitCounter.Utilities;
 using AutoHitCounter.Views.Windows;
 
@@ -16,6 +20,7 @@ namespace AutoHitCounter.ViewModels;
 public class SettingsViewModel : BaseViewModel
 {
     private readonly OverlaySettingsViewModel _overlaySettingsViewModel;
+    private readonly ITwitchAuthService _twitchAuth;
 
     public event Action OnGameSettingChanged;
 
@@ -31,7 +36,8 @@ public class SettingsViewModel : BaseViewModel
         set => SetProperty(ref _selectedSettingsGame, value);
     }
 
-    public SettingsViewModel(IStateService stateService, OverlaySettingsViewModel overlaySettingsViewModel)
+    public SettingsViewModel(IStateService stateService, OverlaySettingsViewModel overlaySettingsViewModel,
+        ITwitchAuthService twitchAuth = null, ITwitchCategoryService twitchCategory = null)
     {
         _overlaySettingsViewModel = overlaySettingsViewModel;
         SelectedSettingsGame = GameTitle.DarkSouls2;
@@ -40,6 +46,20 @@ public class SettingsViewModel : BaseViewModel
         IsExternalIntegrationEnabled = SettingsManager.Default.ExternalIntegrationEnabled;
         ExternalIntegrationEndpoint = SettingsManager.Default.ExternalIntegrationEndpointUrl;
         ExternalIntegrationUserId = SettingsManager.Default.ExternalIntegrationUserIdentifier;
+
+        _twitchAuth = twitchAuth;
+        ConnectTwitchCommand = new DelegateCommand(ConnectTwitch, () => !IsTwitchConnected);
+        DisconnectTwitchCommand = new DelegateCommand(DisconnectTwitch, () => IsTwitchConnected);
+
+        _isTwitchIntegrationEnabled = SettingsManager.Default.TwitchIntegrationEnabled;
+        _twitchOnlyWhenLive = SettingsManager.Default.TwitchOnlyWhenLive;
+        _twitchClientId = SettingsManager.Default.TwitchClientId;
+
+        if (_twitchAuth != null)
+            _twitchAuth.ConnectionChanged += () => OnUiThread(RefreshTwitchConnection);
+
+        if (twitchCategory != null)
+            twitchCategory.StatusChanged += status => OnUiThread(() => TwitchStatus = status);
     }
 
 
@@ -332,6 +352,169 @@ public class SettingsViewModel : BaseViewModel
     }
 
     #endregion
+
+    #endregion
+
+    #region Twitch Integration
+
+    public DelegateCommand ConnectTwitchCommand { get; }
+    public DelegateCommand DisconnectTwitchCommand { get; }
+
+    public ObservableCollection<TwitchCategoryMappingViewModel> TwitchCategories { get; } = new();
+
+    private bool _isTwitchIntegrationEnabled;
+
+    public bool IsTwitchIntegrationEnabled
+    {
+        get => _isTwitchIntegrationEnabled;
+        set
+        {
+            if (!SetProperty(ref _isTwitchIntegrationEnabled, value)) return;
+            SettingsManager.Default.TwitchIntegrationEnabled = value;
+            SettingsManager.Default.Save();
+        }
+    }
+
+    private bool _twitchOnlyWhenLive;
+
+    public bool TwitchOnlyWhenLive
+    {
+        get => _twitchOnlyWhenLive;
+        set
+        {
+            if (!SetProperty(ref _twitchOnlyWhenLive, value)) return;
+            SettingsManager.Default.TwitchOnlyWhenLive = value;
+            SettingsManager.Default.Save();
+        }
+    }
+
+    private string _twitchClientId;
+
+    public string TwitchClientId
+    {
+        get => _twitchClientId;
+        set
+        {
+            if (!SetProperty(ref _twitchClientId, value)) return;
+            SettingsManager.Default.TwitchClientId = value;
+            SettingsManager.Default.Save();
+        }
+    }
+
+    private string _twitchStatus;
+
+    public string TwitchStatus
+    {
+        get => _twitchStatus;
+        private set => SetProperty(ref _twitchStatus, value);
+    }
+
+    public bool IsTwitchConnected => _twitchAuth != null && _twitchAuth.IsConnected;
+
+    public string TwitchConnectionText => IsTwitchConnected
+        ? $"Connected as {_twitchAuth.BroadcasterLogin}"
+        : "Not connected";
+
+    /// <summary>
+    /// Rebuilds the category table. Driven by MainViewModel because the game list, custom games
+    /// included, lives there.
+    /// </summary>
+    public void LoadTwitchCategories(IEnumerable<Game> games)
+    {
+        TwitchCategories.Clear();
+        if (games == null) return;
+
+        var overrides = TwitchCategoryStore.Load();
+
+        foreach (var game in games)
+        {
+            var name = overrides.TryGetValue(game.GameName, out var configured) && configured != null
+                ? configured.Name
+                : TwitchCategoryMap.ForGameName(game.GameName)?.Name;
+
+            TwitchCategories.Add(new TwitchCategoryMappingViewModel(
+                game.GameName, name ?? string.Empty, OnTwitchCategoryChanged));
+        }
+    }
+
+    private void OnTwitchCategoryChanged(string gameName, string categoryName)
+    {
+        var overrides = TwitchCategoryStore.Load();
+        var trimmed = categoryName?.Trim();
+        var fallback = TwitchCategoryMap.ForGameName(gameName);
+
+        // Blank, or back to the built-in value: drop the override so later default changes apply.
+        if (string.IsNullOrEmpty(trimmed) ||
+            (fallback != null && string.Equals(fallback.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!overrides.Remove(gameName)) return;
+            TwitchCategoryStore.Save(overrides);
+            return;
+        }
+
+        // The id is resolved against Helix the first time this category is actually used.
+        overrides[gameName] = new TwitchCategory { Name = trimmed, Id = null };
+        TwitchCategoryStore.Save(overrides);
+    }
+
+    private async void ConnectTwitch()
+    {
+        if (_twitchAuth == null) return;
+
+        try
+        {
+            TwitchStatus = "Asking Twitch for a code...";
+
+            var device = await _twitchAuth.StartDeviceAuthorizationAsync();
+            if (device == null)
+            {
+                TwitchStatus = "Twitch did not return a device code.";
+                return;
+            }
+
+            var window = new TwitchAuthWindow(device, token => _twitchAuth.AwaitAuthorizationAsync(device, token))
+            {
+                Owner = Application.Current?.MainWindow
+            };
+
+            var authorized = window.ShowDialog() == true;
+
+            TwitchStatus = authorized
+                ? $"Connected as {_twitchAuth.BroadcasterLogin}."
+                : "Twitch authorization was not completed.";
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Connecting to Twitch failed");
+            TwitchStatus = "Could not reach Twitch - see the log for details.";
+        }
+        finally
+        {
+            RefreshTwitchConnection();
+        }
+    }
+
+    private void DisconnectTwitch()
+    {
+        _twitchAuth?.Disconnect();
+        TwitchStatus = "Disconnected from Twitch.";
+        RefreshTwitchConnection();
+    }
+
+    private void RefreshTwitchConnection()
+    {
+        OnPropertyChanged(nameof(IsTwitchConnected));
+        OnPropertyChanged(nameof(TwitchConnectionText));
+        ConnectTwitchCommand.RaiseCanExecuteChanged();
+        DisconnectTwitchCommand.RaiseCanExecuteChanged();
+    }
+
+    private static void OnUiThread(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) action();
+        else dispatcher.Invoke(action);
+    }
 
     #endregion
 

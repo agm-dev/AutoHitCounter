@@ -4,6 +4,7 @@ using AutoHitCounter.Enums;
 using AutoHitCounter.Interfaces;
 using AutoHitCounter.Memory;
 using AutoHitCounter.Services;
+using AutoHitCounter.Services.Twitch;
 using AutoHitCounter.Utilities;
 using AutoHitCounter.ViewModels;
 
@@ -47,6 +48,11 @@ namespace AutoHitCounter
             SplitNavigationService splitNavigationService = new SplitNavigationService();
             IExternalIntegrationService externalIntegrationService = new ExternalIntegrationService();
 
+            ITwitchApiClient twitchApiClient = new TwitchApiClient();
+            ITwitchAuthService twitchAuthService = new TwitchAuthService(twitchApiClient);
+            ITwitchCategoryService twitchCategoryService =
+                new TwitchCategoryService(twitchAuthService, twitchApiClient);
+
             HookManager hookManager = new HookManager(memoryService);
 
             var hotkeyManager = new HotkeyManager(memoryService);
@@ -59,7 +65,8 @@ namespace AutoHitCounter
 
             var overlaySettingsViewModel = new OverlaySettingsViewModel(overlayServerService, overlayProfileManager);
 
-            var settingsViewModel = new SettingsViewModel(stateService, overlaySettingsViewModel);
+            var settingsViewModel = new SettingsViewModel(stateService, overlaySettingsViewModel,
+                twitchAuthService, twitchCategoryService);
 
             var hotkeysViewModel = new HotkeyTabViewModel(hotkeyManager, stateService);
 
@@ -71,7 +78,7 @@ namespace AutoHitCounter
             _mainViewModel = new MainViewModel(hotkeyManager, gameModuleFactory, profileService,
                 stateService,
                 settingsViewModel, hotkeysViewModel, overlayServerService, splitNavigationService, externalIntegrationService,
-                orchestrator, runStateService, customGameService);
+                orchestrator, runStateService, customGameService, twitchCategoryService);
             var mainWindow = new MainWindow
             {
                 DataContext = _mainViewModel

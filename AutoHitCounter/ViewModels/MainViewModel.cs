@@ -28,6 +28,10 @@ namespace AutoHitCounter.ViewModels
         private string _lastIgt;
         private readonly IRunStateService _runStateService;
         private readonly IGameSessionOrchestrator _orchestrator;
+        private readonly ITwitchCategoryService _twitchCategoryService;
+
+        // Restoring the last session on start-up must not touch anyone's channel.
+        private bool _twitchSyncArmed;
 
         public SettingsViewModel Settings { get; }
         public HotkeyTabViewModel Hotkeys { get; }
@@ -38,9 +42,11 @@ namespace AutoHitCounter.ViewModels
             HotkeyTabViewModel hotkeyTabViewModel, IOverlayServerService overlayServerService,
             ISplitNavigationService splitNavigationService, IExternalIntegrationService externalIntegrationService,
             IGameSessionOrchestrator orchestrator,
-            IRunStateService runStateService, ICustomGameService customGameService)
+            IRunStateService runStateService, ICustomGameService customGameService,
+            ITwitchCategoryService twitchCategoryService = null)
         {
             Settings = settings;
+            _twitchCategoryService = twitchCategoryService;
             Hotkeys = hotkeyTabViewModel;
             _orchestrator = orchestrator;
             _orchestrator.Initialize(this, GetActiveEvents);
@@ -94,6 +100,9 @@ namespace AutoHitCounter.ViewModels
             SelectedGame = Games.FirstOrDefault(game => game.GameName == SettingsManager.Default.LastSelectedGame);
             if (_selectedGame != null)
                 StartTrackingGame();
+
+            Settings?.LoadTwitchCategories(Games);
+            _twitchSyncArmed = true;
         }
 
         #region Commands
@@ -681,6 +690,11 @@ namespace AutoHitCounter.ViewModels
             SettingsManager.Default.Save();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
+
+            // Fire and forget: the service swallows its own failures, and a Twitch hiccup must
+            // never stop the tool from tracking hits.
+            if (_twitchSyncArmed)
+                _ = _twitchCategoryService?.SyncCategoryAsync(_selectedGame);
         }
 
         private void AutoAdvanceSplit()
@@ -1014,6 +1028,8 @@ namespace AutoHitCounter.ViewModels
 
             SelectedGame = game;
             StartTrackingGame();
+
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void DeleteCustomGame()
@@ -1040,6 +1056,8 @@ namespace AutoHitCounter.ViewModels
 
             Games.Remove(_selectedGame);
             SelectedGame = Games.FirstOrDefault();
+
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void RenameCustomGame()
@@ -1066,6 +1084,7 @@ namespace AutoHitCounter.ViewModels
             }
 
             _customGameService.Rename(oldName, newName);
+            TwitchCategoryStore.Rename(oldName, newName);
 
             var game = _selectedGame;
             game.GameName = newName;
@@ -1082,6 +1101,9 @@ namespace AutoHitCounter.ViewModels
 
             if (_orchestrator.ActiveGame == game)
                 AttachedText = $"Custom Game: {newName}";
+
+            // Categories are keyed by game name, so the row has to follow the rename.
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void SaveNotes()
