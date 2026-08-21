@@ -256,7 +256,7 @@
                                     <Label Content="Runner ID:" />
                                     <Grid Width="430">
                                         <TextBox
-                                            Text="{Binding ExternalIntegrationEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                                            Text="{Binding ExternalIntegrationUserId, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock
                                             Text="In case external services requires an identifier to manage multiple users."
                                             FontSize="11" FontStyle="Italic" Foreground="#777"
