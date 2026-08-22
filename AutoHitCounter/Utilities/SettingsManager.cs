@@ -51,6 +51,12 @@ public class SettingsManager
     public string ExternalIntegrationEndpointUrl { get; set; }
     public string ExternalIntegrationUserIdentifier { get; set; }
 
+    public bool TwitchIntegrationEnabled { get; set; }
+    [DefaultValue(true)] public bool TwitchOnlyWhenLive { get; set; }
+    public string TwitchClientId { get; set; }
+    public string TwitchBroadcasterLogin { get; set; }
+    public string TwitchCategoryMappings { get; set; }
+
     public string LastImportExportPath { get; set; }
 
     public double EventLogWindowLeft { get; set; }

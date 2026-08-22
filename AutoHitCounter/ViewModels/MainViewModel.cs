@@ -28,8 +28,12 @@ namespace AutoHitCounter.ViewModels
         private string _lastIgt;
         private readonly IRunStateService _runStateService;
         private readonly IGameSessionOrchestrator _orchestrator;
+        private readonly ITwitchCategoryService _twitchCategoryService;
         private readonly IMultirunService _multirunService;
         private bool _wasRunComplete;
+
+        // Guards both the multirun broadcast and the Twitch sync: restoring the last session on
+        // start-up must not move a multirun on or touch anyone's channel.
         private bool _isInitialising;
 
         public SettingsViewModel Settings { get; }
@@ -42,10 +46,12 @@ namespace AutoHitCounter.ViewModels
             ISplitNavigationService splitNavigationService, IExternalIntegrationService externalIntegrationService,
             IGameSessionOrchestrator orchestrator,
             IRunStateService runStateService, ICustomGameService customGameService,
-            IMultirunService multirunService)
+            IMultirunService multirunService,
+            ITwitchCategoryService twitchCategoryService = null)
         {
             _isInitialising = true;
             Settings = settings;
+            _twitchCategoryService = twitchCategoryService;
             Hotkeys = hotkeyTabViewModel;
             _orchestrator = orchestrator;
             _orchestrator.Initialize(this, GetActiveEvents);
@@ -102,6 +108,8 @@ namespace AutoHitCounter.ViewModels
             SelectedGame = Games.FirstOrDefault(game => game.GameName == SettingsManager.Default.LastSelectedGame);
             if (_selectedGame != null)
                 StartTrackingGame();
+
+            Settings?.LoadTwitchCategories(Games);
 
             _isInitialising = false;
             _multirunService.Broadcast();
@@ -727,6 +735,10 @@ namespace AutoHitCounter.ViewModels
             if (_isInitialising) return;
             _multirunService.OnGameTracked(_selectedGame.GameName);
             _multirunService.SyncHits(_selectedGame.GameName, TotalHits > 0);
+
+            // Fire and forget: the service swallows its own failures, and a Twitch hiccup must
+            // never stop the tool from tracking hits.
+            _ = _twitchCategoryService?.SyncCategoryAsync(_selectedGame);
         }
 
         private void StartTrackingGame()
@@ -1076,6 +1088,8 @@ namespace AutoHitCounter.ViewModels
 
             SelectedGame = game;
             StartTrackingGame();
+
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void DeleteCustomGame()
@@ -1102,6 +1116,8 @@ namespace AutoHitCounter.ViewModels
 
             Games.Remove(_selectedGame);
             SelectedGame = Games.FirstOrDefault();
+
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void RenameCustomGame()
@@ -1128,6 +1144,7 @@ namespace AutoHitCounter.ViewModels
             }
 
             _customGameService.Rename(oldName, newName);
+            TwitchCategoryStore.Rename(oldName, newName);
 
             var game = _selectedGame;
             game.GameName = newName;
@@ -1144,6 +1161,9 @@ namespace AutoHitCounter.ViewModels
 
             if (_orchestrator.ActiveGame == game)
                 AttachedText = $"Custom Game: {newName}";
+
+            // Categories are keyed by game name, so the row has to follow the rename.
+            Settings?.LoadTwitchCategories(Games);
         }
 
         private void SaveNotes()
