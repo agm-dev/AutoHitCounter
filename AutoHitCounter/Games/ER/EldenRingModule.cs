@@ -158,5 +158,8 @@ public class EldenRingModule : IGameModule, IDisposable, IVersionedGameModule
 
         var disableAchievements = SettingsManager.Default.ERDisableAchievements;
         if (disableAchievements || !onlyEnabled) _settingsService.ToggleDisableAchievements(disableAchievements);
+
+        var menuInputDelayFix = SettingsManager.Default.ERMenuInputDelayFix;
+        if (menuInputDelayFix || !onlyEnabled) _settingsService.ToggleMenuInputDelayFix(menuInputDelayFix);
     }
 }

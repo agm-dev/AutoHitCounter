@@ -190,6 +190,20 @@ public class SettingsViewModel : BaseViewModel
         }
     }
 
+    private bool _erMenuInputDelayFix;
+
+    public bool ERMenuInputDelayFix
+    {
+        get => _erMenuInputDelayFix;
+        set
+        {
+            if (!SetProperty(ref _erMenuInputDelayFix, value)) return;
+            SettingsManager.Default.ERMenuInputDelayFix = value;
+            SettingsManager.Default.Save();
+            OnGameSettingChanged?.Invoke();
+        }
+    }
+
     #endregion
 
     #region Dark Souls 3
@@ -586,6 +600,9 @@ public class SettingsViewModel : BaseViewModel
 
         _erDisableAchievements = SettingsManager.Default.ERDisableAchievements;
         OnPropertyChanged(nameof(ERDisableAchievements));
+
+        _erMenuInputDelayFix = SettingsManager.Default.ERMenuInputDelayFix;
+        OnPropertyChanged(nameof(ERMenuInputDelayFix));
     }
 
     private void ApplyDS3Settings()

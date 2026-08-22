@@ -42,6 +42,7 @@ public class SettingsManager
     public bool ERNoLogo { get; set; }
     public bool ERStutterFix { get; set; }
     public bool ERDisableAchievements { get; set; }
+    public bool ERMenuInputDelayFix { get; set; }
     public bool SKNoLogo { get; set; }
     public bool SKNoTutorials { get; set; }
     public bool DS2NoBabyJump { get; set; }
