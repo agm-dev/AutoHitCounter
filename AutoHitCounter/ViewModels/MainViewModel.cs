@@ -666,12 +666,20 @@ namespace AutoHitCounter.ViewModels
         }
 
         /// <summary>
+        /// The multirun only ever follows the game being tracked, so selecting another game or profile
+        /// to look at (or to get ready) leaves the multirun alone until it is tracked.
+        /// </summary>
+        private bool IsTrackingSelectedGame => _selectedGame != null && _selectedGame == _orchestrator.ActiveGame;
+
+        /// <summary>
         /// Broadcasts the overlay state, keeping the game currently being run on the multirun overlay
         /// marked in line with the hits of the run.
         /// </summary>
         private void BroadcastOverlayState()
         {
-            _multirunService.SyncHits(_selectedGame?.GameName, TotalHits > 0);
+            if (IsTrackingSelectedGame)
+                _multirunService.SyncHits(_selectedGame.GameName, TotalHits > 0);
+
             _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
         }
 
@@ -683,8 +691,8 @@ namespace AutoHitCounter.ViewModels
             var wasRunComplete = _wasRunComplete;
             _wasRunComplete = IsRunComplete;
 
-            if (!wasRunComplete && IsRunComplete)
-                _multirunService.CompleteGame(_selectedGame?.GameName, TotalHits > 0);
+            if (!wasRunComplete && IsRunComplete && IsTrackingSelectedGame)
+                _multirunService.CompleteGame(_selectedGame.GameName, TotalHits > 0);
         }
 
         private void OnSplitStateChanged()
@@ -1189,9 +1197,12 @@ namespace AutoHitCounter.ViewModels
 
         private void ResetSplits()
         {
-            // Resetting the run by hand starts the multirun over; the automatic reset on a new game
-            // is left to the multirun's own new game handling.
-            _multirunService.ResetProgress();
+            // Resetting the game being tracked by hand starts the multirun over; resetting the splits of
+            // any other game only clears that game's run. The automatic reset on a new game is left to
+            // the multirun's own new game handling.
+            if (IsTrackingSelectedGame)
+                _multirunService.ResetProgress();
+
             ResetRun();
         }
 
