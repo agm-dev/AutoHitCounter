@@ -645,6 +645,30 @@
                                 For more advanced editing it can all be done by editing the Overlay.html file to your liking :)
                             </TextBlock>
 
+                            <!-- Multirun -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Multiruns
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                A multirun is a run made of several games. In the settings tab click on Open Multirun Settings, tick "Enable Multirun" and add the games that make up your run, in the order you want them shown. Each game gets an abbreviation (DS1, DS2, ER...) that you can edit to whatever you prefer.
+                                <LineBreak />
+                                <LineBreak />
+                                The games are shown on their own overlay, so add "Multirun.html" as a second Browser Source in OBS, the same way you added Overlay.html, and place it wherever you want (above the hit counter for example).
+                                <LineBreak />
+                                <LineBreak />
+                                The game you are currently running is outlined, the games you finish without taking a hit turn green, and a game that took hits turns red. Finishing a game (moving past the last split, when "Run Complete" shows up) moves the multirun on to the next game.
+                                <LineBreak />
+                                <LineBreak />
+                                The shuffle button next to the game selector randomizes the order of the games and starts the multirun over. Resetting the run does the same without shuffling, and starting a new game on a game that took hits restarts the multirun from that game.
+                                <LineBreak />
+                                <LineBreak />
+                                Tracking a game that is part of your multirun also moves it to the spot you are currently on, so you can play the games in whatever order you end up going for.
+                            </TextBlock>
+
                         </StackPanel>
 
                     </Grid>

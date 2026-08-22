@@ -11,4 +11,5 @@ public interface IOverlayServerService
     void BroadcastState(OverlayState state);
     void BroadcastIgt(string formatted);
     void BroadcastConfig(OverlayConfig config);
+    void BroadcastMultirun(MultirunState state);
 }

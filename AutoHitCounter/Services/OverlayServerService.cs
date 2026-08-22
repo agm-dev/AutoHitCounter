@@ -18,6 +18,7 @@ public class OverlayServerService : IOverlayServerService, IDisposable
 
     private string _lastStateJson;
     private string _lastConfigJson;
+    private string _lastMultirunJson;
 
     private const int Port = 16200;
 
@@ -36,6 +37,8 @@ public class OverlayServerService : IOverlayServerService, IDisposable
                         socket.Send(_lastConfigJson);
                     if (_lastStateJson != null)
                         socket.Send(_lastStateJson);
+                    if (_lastMultirunJson != null)
+                        socket.Send(_lastMultirunJson);
                 };
                 socket.OnClose = () =>
                 {
@@ -75,6 +78,16 @@ public class OverlayServerService : IOverlayServerService, IDisposable
             new { type = "config", data = config },
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         _lastConfigJson = json;
+        Broadcast(json);
+    }
+
+    public void BroadcastMultirun(MultirunState state)
+    {
+        var json = JsonSerializer.Serialize(
+            new { type = "multirun", data = state },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        _lastMultirunJson = json;
         Broadcast(json);
     }
 
