@@ -204,6 +204,45 @@ public class MultirunServiceTests
     }
 
     [Fact]
+    public void OnGameTracked_AfterAHit_RestartsTheMultirunFromThatGame()
+    {
+        var sut = CreateSut(true, "DS1", "DS2", "DS3");
+        sut.SyncHits("DS1", hasHits: true);
+
+        sut.OnGameTracked("DS2");
+
+        Assert.Equal(new[] { "DS2", "DS1", "DS3" }, Order(sut));
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_AfterCompletingAGameWithHits_RestartsTheMultirunFromThatGame()
+    {
+        var sut = CreateSut(true, "DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: true);
+
+        sut.OnGameTracked("DS3");
+
+        Assert.Equal(new[] { "DS3", "DS1", "DS2" }, Order(sut));
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_TheGameAlreadyBeingRun_KeepsItsHitMark()
+    {
+        var sut = CreateSut(true, "DS1", "DS2");
+        sut.SyncHits("DS1", hasHits: true);
+
+        sut.OnGameTracked("DS1");
+
+        Assert.Equal(new[] { "DS1", "DS2" }, Order(sut));
+        Assert.Equal(MultirunStatus.Hit, StatusOf(sut, "DS1"));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
     public void OnGameTracked_GameOutsideTheMultirun_IsIgnored()
     {
         var sut = CreateSut(true, "DS1", "DS2");

@@ -144,6 +144,13 @@ public class MultirunService : IMultirunService
         var currentIndex = _config.CurrentIndex;
         if (index == currentIndex) return;
 
+        // Moving to another game after taking a hit is a restart of the multirun from that game.
+        if (HasHitMark)
+        {
+            RestartFrom(index);
+            return;
+        }
+
         if (currentIndex < 0 || index < currentIndex)
         {
             // Nothing to reorder: the multirun simply goes back to (or starts at) that game.
@@ -165,14 +172,9 @@ public class MultirunService : IMultirunService
 
         var index = IndexOf(_config.Entries, gameName);
         if (index < 0) return;
-        if (_config.Entries.All(e => e.Status != MultirunStatus.Hit)) return;
+        if (!HasHitMark) return;
 
-        var entry = _config.Entries[index];
-        _config.Entries.RemoveAt(index);
-        _config.Entries.Insert(0, entry);
-
-        ClearProgress();
-        SaveAndPublish();
+        RestartFrom(index);
     }
 
     public void Broadcast() => _overlayServerService?.BroadcastMultirun(BuildState());
@@ -197,6 +199,19 @@ public class MultirunService : IMultirunService
         _config.CurrentIndex >= 0 && _config.CurrentIndex < _config.Entries.Count
             ? _config.Entries[_config.CurrentIndex]
             : null;
+
+    private bool HasHitMark => _config.Entries.Any(e => e.Status == MultirunStatus.Hit);
+
+    /// <summary>Starts the multirun over with the given game first and current.</summary>
+    private void RestartFrom(int index)
+    {
+        var entry = _config.Entries[index];
+        _config.Entries.RemoveAt(index);
+        _config.Entries.Insert(0, entry);
+
+        ClearProgress();
+        SaveAndPublish();
+    }
 
     private void ClearProgress()
     {

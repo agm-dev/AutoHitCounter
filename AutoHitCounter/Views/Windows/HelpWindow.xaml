@@ -663,10 +663,13 @@
                                 The game you are currently running is outlined, the games you finish without taking a hit turn green, and a game that took hits turns red. Finishing a game (moving past the last split, when "Run Complete" shows up) moves the multirun on to the next game.
                                 <LineBreak />
                                 <LineBreak />
-                                The shuffle button next to the game selector randomizes the order of the games and starts the multirun over. Resetting the run does the same without shuffling, and starting a new game on a game that took hits restarts the multirun from that game.
+                                The shuffle button next to the game selector randomizes the order of the games and starts the multirun over. Resetting the run does the same without shuffling.
                                 <LineBreak />
                                 <LineBreak />
-                                Tracking a game that is part of your multirun also moves it to the spot you are currently on, so you can play the games in whatever order you end up going for.
+                                Tracking a game that is part of your multirun moves it to the spot you are currently on, so you can play the games in whatever order you end up going for.
+                                <LineBreak />
+                                <LineBreak />
+                                Once a game is marked red, though, the multirun is over: starting a new game on it, or tracking a different game of the multirun, starts everything over from the game you just went to.
                             </TextBlock>
 
                         </StackPanel>

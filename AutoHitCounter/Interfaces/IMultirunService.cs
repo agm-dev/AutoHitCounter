@@ -31,7 +31,10 @@ public interface IMultirunService
     /// <summary>Marks the current game as completed (green when hitless, red otherwise) and moves on to the next one.</summary>
     void CompleteGame(string gameName, bool hasHits);
 
-    /// <summary>Moves a game that is being tracked to the current position of the list and marks it as current.</summary>
+    /// <summary>
+    /// Moves a game that is being tracked to the current position of the list and marks it as current,
+    /// or restarts the multirun from that game when any game is marked with a hit.
+    /// </summary>
     void OnGameTracked(string gameName);
 
     /// <summary>Restarts the multirun from the given game when any game is marked with a hit.</summary>
