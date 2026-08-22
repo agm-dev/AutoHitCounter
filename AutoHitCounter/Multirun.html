@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="color-scheme" content="dark">
+    <title>Auto Hit Counter Multirun Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body styling for transparent overlay */
+        body {
+            background: transparent;
+            font-family: 'Segoe UI', sans-serif;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        /* Single row holding every game of the multirun */
+        #multirun {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            width: max-content;
+            padding: 4px 6px;
+        }
+
+        /* One game abbreviation - the border is always there so the row never shifts */
+        .mr-game {
+            border: 2px solid transparent;
+            border-radius: 4px;
+            padding: 1px 6px;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<!-- Game abbreviations - injected by render() -->
+<div id="multirun"></div>
+
+<script>
+    (function () {
+        const WS_URL = 'ws://localhost:16200';
+        const RECONNECT_INTERVAL = 3000;
+
+        const DEFAULTS = {
+            enabled: false,
+            entries: [],
+            fontFamily: 'Segoe UI',
+            fontSize: 20,
+            fontBold: true,
+            spacing: 12,
+            backgroundOpacity: 0,
+            baseColor: '#e0e0e0',
+            completedColor: '#00cc66',
+            hitColor: '#ff4c4c',
+            currentBorderColor: '#e0e0e0'
+        };
+
+        let state = {...DEFAULTS};
+
+        // Last known state, so the overlay is already drawn before the app connects back
+        const saved = localStorage.getItem('multirunState');
+        if (saved) {
+            try {
+                Object.assign(state, JSON.parse(saved));
+            } catch {
+            }
+        }
+
+        const multirunEl = document.getElementById('multirun');
+
+        let ws = null;
+
+        function connect() {
+            ws = new WebSocket(WS_URL);
+            ws.onclose = function () {
+                setTimeout(connect, RECONNECT_INTERVAL);
+            };
+            ws.onerror = function () {
+                ws.close();
+            };
+            ws.onmessage = function (event) {
+                const msg = JSON.parse(event.data);
+                if (msg.type !== 'multirun') return;
+
+                state = {...DEFAULTS, ...msg.data};
+                localStorage.setItem('multirunState', JSON.stringify(state));
+                render();
+            };
+        }
+
+        function colorFor(entry) {
+            if (entry.status === 'completed') return state.completedColor;
+            if (entry.status === 'hit') return state.hitColor;
+            return state.baseColor;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
+        function render() {
+            const entries = state.entries || [];
+            const visible = state.enabled && entries.length > 0;
+
+            multirunEl.style.display = visible ? 'flex' : 'none';
+            if (!visible) return;
+
+            multirunEl.style.fontFamily = state.fontFamily || DEFAULTS.fontFamily;
+            multirunEl.style.fontSize = (state.fontSize || DEFAULTS.fontSize) + 'px';
+            multirunEl.style.fontWeight = state.fontBold ? 'bold' : 'normal';
+            multirunEl.style.gap = (state.spacing >= 0 ? state.spacing : DEFAULTS.spacing) + 'px';
+            multirunEl.style.background = state.backgroundOpacity > 0
+                ? `rgba(0, 0, 0, ${state.backgroundOpacity})`
+                : 'transparent';
+
+            multirunEl.innerHTML = entries.map(function (entry) {
+                const border = entry.isCurrent
+                    ? (state.currentBorderColor || state.baseColor)
+                    : 'transparent';
+                return `<span class="mr-game" style="color:${colorFor(entry)};border-color:${border}">`
+                    + escapeHtml(entry.abbreviation || '')
+                    + `</span>`;
+            }).join('');
+        }
+
+        render();
+        connect();
+    })
+    ();
+</script>
+</body>
+</html>

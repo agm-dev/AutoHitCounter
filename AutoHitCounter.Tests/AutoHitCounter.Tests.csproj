@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\xunit.runner.visualstudio.2.8.2\build\net462\xunit.runner.visualstudio.props" Condition="Exists('..\packages\xunit.runner.visualstudio.2.8.2\build\net462\xunit.runner.visualstudio.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
@@ -61,6 +61,7 @@
   <ItemGroup>
     <Compile Include="Services\CustomGameServiceTests.cs" />
     <Compile Include="Services\GameSessionOrchestratorTests.cs" />
+    <Compile Include="Services\MultirunServiceTests.cs" />
     <Compile Include="Services\RunStateServiceTests.cs" />
     <Compile Include="Services\SplitNavigationServiceTests.cs" />
     <Compile Include="ViewModels\MainViewModelTests.cs" />

@@ -1,4 +1,4 @@
-//
+﻿//
 
 using System;
 using System.Collections.Generic;
@@ -23,6 +23,7 @@ public class MainViewModelTests
     private readonly IGameSessionOrchestrator _orchestrator = Substitute.For<IGameSessionOrchestrator>();
     private readonly IRunStateService _runStateService = Substitute.For<IRunStateService>();
     private readonly ICustomGameService _customGameService = Substitute.For<ICustomGameService>();
+    private readonly IMultirunService _multirunService = Substitute.For<IMultirunService>();
 
     private readonly MainViewModel _sut;
 
@@ -35,7 +36,7 @@ public class MainViewModelTests
         _sut = new MainViewModel(
             _hotkeyManager, _gameModuleFactory, _profileService, _stateService,
             null, null, _overlayServerService, _splitNav, _externalIntegration,
-            _orchestrator, _runStateService, _customGameService);
+            _orchestrator, _runStateService, _customGameService, _multirunService);
     }
 
     private SplitViewModel AddChildSplit(string name = "Boss", int hits = 0, int pb = 0)
@@ -527,6 +528,90 @@ public class MainViewModelTests
         _sut.SetPbCommand.Execute(null);
 
         _overlayServerService.Received().BroadcastState(Arg.Any<OverlayState>());
+    }
+
+    #endregion
+
+    #region Multirun
+
+    private Game SelectGame(bool tracked, string name = "Elden Ring")
+    {
+        var game = new Game { GameName = name };
+        _sut.SelectedGame = game;
+        if (tracked) _orchestrator.ActiveGame.Returns(game);
+        return game;
+    }
+
+    [Fact]
+    public void OverlayState_WhenTrackingTheSelectedGame_MarksTheMultirunGameWithTheRunHits()
+    {
+        var game = SelectGame(tracked: true);
+        AddChildSplit(hits: 2);
+        _multirunService.ClearReceivedCalls();
+
+        _splitNav.StateChanged += Raise.Event<Action>();
+
+        _multirunService.Received().SyncHits(game.GameName, true);
+    }
+
+    [Fact]
+    public void OverlayState_WhenTheSelectedGameIsNotTracked_LeavesTheMultirunAlone()
+    {
+        SelectGame(tracked: false);
+        AddChildSplit(hits: 2);
+        _multirunService.ClearReceivedCalls();
+
+        _splitNav.StateChanged += Raise.Event<Action>();
+
+        _multirunService.DidNotReceive().SyncHits(Arg.Any<string>(), Arg.Any<bool>());
+    }
+
+    [Fact]
+    public void Reset_WhenTrackingTheSelectedGame_RestartsTheMultirun()
+    {
+        SelectGame(tracked: true);
+        _multirunService.ClearReceivedCalls();
+
+        _sut.ResetCommand.Execute(null);
+
+        _multirunService.Received().ResetProgress();
+    }
+
+    [Fact]
+    public void Reset_WhenTheSelectedGameIsNotTracked_LeavesTheMultirunAlone()
+    {
+        SelectGame(tracked: false);
+        _multirunService.ClearReceivedCalls();
+
+        _sut.ResetCommand.Execute(null);
+
+        _multirunService.DidNotReceive().ResetProgress();
+    }
+
+    [Fact]
+    public void RunComplete_WhenTrackingTheSelectedGame_CompletesTheMultirunGame()
+    {
+        var game = SelectGame(tracked: true);
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _splitNav.IsRunComplete.Returns(true);
+        _multirunService.ClearReceivedCalls();
+
+        _splitNav.StateChanged += Raise.Event<Action>();
+
+        _multirunService.Received().CompleteGame(game.GameName, Arg.Any<bool>());
+    }
+
+    [Fact]
+    public void RunComplete_WhenTheSelectedGameIsNotTracked_LeavesTheMultirunAlone()
+    {
+        SelectGame(tracked: false);
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _splitNav.IsRunComplete.Returns(true);
+        _multirunService.ClearReceivedCalls();
+
+        _splitNav.StateChanged += Raise.Event<Action>();
+
+        _multirunService.DidNotReceive().CompleteGame(Arg.Any<string>(), Arg.Any<bool>());
     }
 
     #endregion
