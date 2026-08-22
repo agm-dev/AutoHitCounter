@@ -1,4 +1,4 @@
-<Window x:Class="AutoHitCounter.Views.Windows.HelpWindow"
+﻿<Window x:Class="AutoHitCounter.Views.Windows.HelpWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:AutoHitCounter.Views.Controls"
@@ -62,22 +62,23 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,0">
-                <StackPanel.Resources>
+            <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="10,10,10,0">
+                <WrapPanel.Resources>
                     <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                        <Setter Property="Margin" Value="0,0,4,0" />
+                        <Setter Property="Margin" Value="0,0,4,4" />
                         <Setter Property="Padding" Value="10,4" />
                     </Style>
-                </StackPanel.Resources>
+                </WrapPanel.Resources>
                 <Button x:Name="TabOverview" Content="Overview" Click="Tab_Click" Tag="0" />
                 <Button x:Name="TabSplits" Content="Splits" Click="Tab_Click" Tag="1" />
                 <Button x:Name="TabProfileEditor" Content="Profile Editor" Click="Tab_Click" Tag="2" />
                 <Button x:Name="TabHotkeys" Content="Hotkeys" Click="Tab_Click" Tag="3" />
-                <Button x:Name="TabSettingsAndOverlay" Content="Settings &amp; Overlay" Click="Tab_Click" Tag="4"
-                        Margin="0,0,90,0" />
-                <Button Content="A-" FontSize="11" Click="FontDecrease_Click" HorizontalAlignment="Right" />
-                <Button Content="A+" FontSize="11" Click="FontIncrease_Click" HorizontalAlignment="Right" />
-            </StackPanel>
+                <Button x:Name="TabSettingsAndOverlay" Content="Settings &amp; Overlay" Click="Tab_Click" Tag="4" />
+                <Button x:Name="TabMultirun" Content="Multirun" Click="Tab_Click" Tag="5"
+                        Margin="0,0,20,4" />
+                <Button Content="A-" FontSize="11" Click="FontDecrease_Click" />
+                <Button Content="A+" FontSize="11" Click="FontIncrease_Click" />
+            </WrapPanel>
 
             <!-- Pages -->
             <Border Grid.Row="1" Margin="10" BorderBrush="#333" BorderThickness="1" Padding="14">
@@ -654,27 +655,139 @@
 
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
                                        Margin="0,10,5,0" LineHeight="22">
-                                A multirun is a run made of several games. In the settings tab click on Open Multirun Settings, tick "Enable Multirun" and add the games that make up your run, in the order you want them shown. Each game gets an abbreviation (DS1, DS2, ER...) that you can edit to whatever you prefer.
-                                <LineBreak />
-                                <LineBreak />
-                                The games are shown on their own overlay, so add "Multirun.html" as a second Browser Source in OBS, the same way you added Overlay.html, and place it wherever you want (above the hit counter for example).
-                                <LineBreak />
-                                <LineBreak />
-                                The game you are currently running is outlined, the games you finish without taking a hit turn green, and a game that took hits turns red. Finishing a game (moving past the last split, when "Run Complete" shows up) moves the multirun on to the next game.
-                                <LineBreak />
-                                <LineBreak />
-                                The multirun only ever follows the game you are tracking, so you can pick another game and profile and get its splits ready (resetting them for example) without touching the multirun until you hit Track.
-                                <LineBreak />
-                                <LineBreak />
-                                The shuffle button next to the game selector randomizes the order of the games and starts the multirun over. Resetting the run of the game you are tracking does the same without shuffling.
-                                <LineBreak />
-                                <LineBreak />
-                                Tracking a game that is part of your multirun moves it to the spot you are currently on, so you can play the games in whatever order you end up going for.
-                                <LineBreak />
-                                <LineBreak />
-                                Once a game is marked red, though, the multirun is over: starting a new game on it, or tracking a different game of the multirun, starts everything over from the game you just went to.
+                                The settings tab also has an Open Multirun Settings button, for runs made of several games. Head to the Multirun page of this help window for the whole thing.
                             </TextBlock>
 
+                        </StackPanel>
+
+                        <!-- Multirun -->
+                        <StackPanel x:Name="PageMultirun" Visibility="Collapsed">
+                            <TextBlock Text="Multirun" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                A multirun is a run made of several games, for example DS1 into DS2 into DS3 into Elden Ring. The tool keeps the hit counter working exactly as always, one game and one profile at a time, and adds a second overlay showing the games of your run and how far along you are.
+                            </TextBlock>
+
+                            <!-- Setting it up -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Setting up your multirun
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                Go to the Settings tab and click "Open Multirun Settings", then tick "Enable Multirun".
+                                <LineBreak />
+                                <LineBreak />
+                                Pick a game from the dropdown and click "Add", once for every game of your run. Custom games you created yourself can be added too, so games without auto tracking (Demon's Souls, Bloodborne...) can be part of a multirun as well.
+                                <LineBreak />
+                                <LineBreak />
+                                Every game gets an abbreviation (DS1, DS2, ER...), which is what the overlay shows. The box next to each game name is yours to edit if you would rather show something else, up to 8 characters.
+                                <LineBreak />
+                                <LineBreak />
+                                Use the up and down arrows to set the order of the games, and "Remove" to take one out of the run.
+                                <LineBreak />
+                                <LineBreak />
+                                The panel on the right sets how the overlay looks: font, size, spacing between games, background opacity, and the colours for a game not played yet, a game completed hitless, a game that took hits, and the outline of the game being run. Everything applies straight away, so you can leave the overlay on screen while you tweak it.
+                            </TextBlock>
+
+                            <!-- Adding the overlay -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Adding the multirun overlay to OBS
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                It works the same way as the hit counter overlay: add a Browser Source, tick "Local file", and this time pick "Multirun.html" instead of "Overlay.html".
+                                <LineBreak />
+                                <LineBreak />
+                                It is a source of its own, so you can put it wherever you like, above the hit counter for example. Give it enough width to fit all your abbreviations on one line and a height of about twice your font size.
+                            </TextBlock>
+
+                            <!-- Reading the overlay -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Reading the overlay
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                Plain colour: a game you have not played yet.
+                                <LineBreak />
+                                Outlined: the game you are running right now.
+                                <LineBreak />
+                                Green: a game you finished without taking a single hit.
+                                <LineBreak />
+                                Red: a game that took hits. While you are on it, it turns red the moment you take your first hit, and it stays red once you finish it.
+                            </TextBlock>
+
+                            <!-- Running one -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Running a multirun
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                1. Set the order you want, or click the shuffle button next to the game dropdown to randomize it. Shuffling also starts the multirun over, with the first game of the list ready to go.
+                                <LineBreak />
+                                <LineBreak />
+                                2. Select the first game and the profile you are going to use, and get its splits ready: if that profile still has a run from another session on it, hit "Reset" now, before tracking.
+                                <LineBreak />
+                                <LineBreak />
+                                3. Click "Track" and play. From here the hit counter behaves as it always does, and the multirun overlay follows along.
+                                <LineBreak />
+                                <LineBreak />
+                                4. When you go past the last split and "Run Complete" shows up, the game is done: it turns green (or stays red if it took hits) and the outline moves to the next game of the list.
+                                <LineBreak />
+                                <LineBreak />
+                                5. Get the next game ready the same way as in step 2: select the game, select the profile, and reset its splits if needed. None of this touches the multirun, because the multirun only ever follows the game you are tracking.
+                                <LineBreak />
+                                <LineBreak />
+                                6. Click "Track" on it and keep going. If the game you tracked was further down the list, it is moved up to the spot you are on, so you are free to play the games in whatever order you feel like.
+                            </TextBlock>
+
+                            <!-- Starting over -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Starting over
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                The shuffle button randomizes the games and starts the multirun over.
+                                <LineBreak />
+                                <LineBreak />
+                                Resetting the run of the game you are tracking starts the multirun over too, keeping the order and putting you back on the first game of the list.
+                                <LineBreak />
+                                <LineBreak />
+                                Once a game is marked red the multirun is over, and there are two ways to go again: start a new game on it, and the multirun restarts from that game, or track a different game of your list, and the multirun restarts from the one you just went to. Either way the list is put back in order behind it with every mark cleared.
+                            </TextBlock>
+
+                            <!-- Good to know -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Good to know
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                The multirun never reacts to a game you are only looking at. Selecting another game or profile, editing its splits or resetting them leaves it untouched until you hit "Track".
+                                <LineBreak />
+                                <LineBreak />
+                                Everything is saved as you go: the games, their abbreviations, the styling, the order and how far along you are. Closing the tool and opening it back up leaves your multirun exactly where you left it, and tracking your game again does not disturb it.
+                                <LineBreak />
+                                <LineBreak />
+                                Turning "Enable Multirun" off hides the overlay and takes the shuffle button away, without losing your setup or your progress.
+                            </TextBlock>
                         </StackPanel>
 
                     </Grid>
