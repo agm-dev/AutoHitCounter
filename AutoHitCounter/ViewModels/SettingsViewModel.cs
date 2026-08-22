@@ -21,6 +21,7 @@ public class SettingsViewModel : BaseViewModel
 {
     private readonly OverlaySettingsViewModel _overlaySettingsViewModel;
     private readonly ITwitchAuthService _twitchAuth;
+    private readonly MultirunSettingsViewModel _multirunSettingsViewModel;
 
     public event Action OnGameSettingChanged;
 
@@ -29,6 +30,7 @@ public class SettingsViewModel : BaseViewModel
 
     private GameTitle _selectedSettingsGame;
     private OverlaySettingsWindow _overlaySettingsWindow;
+    private MultirunSettingsWindow _multirunSettingsWindow;
 
     public GameTitle SelectedSettingsGame
     {
@@ -37,12 +39,15 @@ public class SettingsViewModel : BaseViewModel
     }
 
     public SettingsViewModel(IStateService stateService, OverlaySettingsViewModel overlaySettingsViewModel,
+        MultirunSettingsViewModel multirunSettingsViewModel,
         ITwitchAuthService twitchAuth = null, ITwitchCategoryService twitchCategory = null)
     {
         _overlaySettingsViewModel = overlaySettingsViewModel;
+        _multirunSettingsViewModel = multirunSettingsViewModel;
         SelectedSettingsGame = GameTitle.DarkSouls2;
         stateService.Subscribe(State.AppStart, OnAppStart);
         OpenOverlaySettingsCommand = new DelegateCommand(OpenOverlaySettings);
+        OpenMultirunSettingsCommand = new DelegateCommand(OpenMultirunSettings);
         IsExternalIntegrationEnabled = SettingsManager.Default.ExternalIntegrationEnabled;
         ExternalIntegrationEndpoint = SettingsManager.Default.ExternalIntegrationEndpointUrl;
         ExternalIntegrationUserId = SettingsManager.Default.ExternalIntegrationUserIdentifier;
@@ -66,6 +71,8 @@ public class SettingsViewModel : BaseViewModel
     #region Commands
 
     public DelegateCommand OpenOverlaySettingsCommand { get; }
+
+    public DelegateCommand OpenMultirunSettingsCommand { get; }
 
     #endregion
 
@@ -553,6 +560,20 @@ public class SettingsViewModel : BaseViewModel
         _overlaySettingsWindow = new OverlaySettingsWindow { DataContext = _overlaySettingsViewModel };
         _overlaySettingsWindow.Closed += (s, e) => _overlaySettingsWindow = null;
         _overlaySettingsWindow.Show();
+    }
+
+    private void OpenMultirunSettings()
+    {
+        if (_multirunSettingsWindow != null)
+        {
+            _multirunSettingsWindow.Activate();
+            return;
+        }
+
+        _multirunSettingsViewModel.Refresh();
+        _multirunSettingsWindow = new MultirunSettingsWindow { DataContext = _multirunSettingsViewModel };
+        _multirunSettingsWindow.Closed += (s, e) => _multirunSettingsWindow = null;
+        _multirunSettingsWindow.Show();
     }
 
     private void ApplyERSettings()

@@ -65,9 +65,6 @@ namespace AutoHitCounter
 
             var overlaySettingsViewModel = new OverlaySettingsViewModel(overlayServerService, overlayProfileManager);
 
-            var settingsViewModel = new SettingsViewModel(stateService, overlaySettingsViewModel,
-                twitchAuthService, twitchCategoryService);
-
             var hotkeysViewModel = new HotkeyTabViewModel(hotkeyManager, stateService);
 
 
@@ -75,10 +72,17 @@ namespace AutoHitCounter
             var customGameService = new CustomGameService(new SettingsCustomGamesStore(), profileService, runStateService);
             var orchestrator = new GameSessionOrchestrator(memoryService, hotkeyManager, gameModuleFactory, stateService);
 
+            var multirunService = new MultirunService(new MultirunFileStore(), overlayServerService);
+            var multirunSettingsViewModel =
+                new MultirunSettingsViewModel(multirunService, gameModuleFactory, customGameService);
+
+            var settingsViewModel = new SettingsViewModel(stateService, overlaySettingsViewModel,
+                multirunSettingsViewModel, twitchAuthService, twitchCategoryService);
+
             _mainViewModel = new MainViewModel(hotkeyManager, gameModuleFactory, profileService,
                 stateService,
                 settingsViewModel, hotkeysViewModel, overlayServerService, splitNavigationService, externalIntegrationService,
-                orchestrator, runStateService, customGameService, twitchCategoryService);
+                orchestrator, runStateService, customGameService, multirunService, twitchCategoryService);
             var mainWindow = new MainWindow
             {
                 DataContext = _mainViewModel

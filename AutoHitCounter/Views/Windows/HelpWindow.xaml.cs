@@ -21,7 +21,8 @@ public partial class HelpWindow
             (StackPanel)FindName("PageSplits"),
             (StackPanel)FindName("PageProfileEditor"),
             (StackPanel)FindName("PageHotkeys"),
-            (StackPanel)FindName("PageSettingsAndOverlay")
+            (StackPanel)FindName("PageSettingsAndOverlay"),
+            (StackPanel)FindName("PageMultirun")
         ];
         _tabs =
         [
@@ -29,7 +30,8 @@ public partial class HelpWindow
             (Button)FindName("TabSplits"),
             (Button)FindName("TabProfileEditor"),
             (Button)FindName("TabHotkeys"),
-            (Button)FindName("TabSettingsAndOverlay")
+            (Button)FindName("TabSettingsAndOverlay"),
+            (Button)FindName("TabMultirun")
         ];
         ShowPage(0);
     }

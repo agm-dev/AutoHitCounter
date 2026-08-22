@@ -70,6 +70,24 @@
 
             <Border BorderBrush="Gray" BorderThickness="1" Margin="0,10,0,0" Padding="5">
                 <StackPanel>
+                    <TextBlock Text="Multirun Settings" FontWeight="Bold" Margin="0,0,0,10" HorizontalAlignment="Left" />
+
+                    <TextBlock Text="Track a run made of several games and show them on their own overlay."
+                               FontSize="11" FontStyle="Italic" Foreground="#777"
+                               Margin="0,-5,0,0" HorizontalAlignment="Left" />
+
+                    <Button Content="Open Multirun Settings"
+                            Command="{Binding OpenMultirunSettingsCommand}"
+                            VerticalAlignment="Center"
+                            MaxWidth="250"
+                            Margin="0,5,0,5"
+                            Height="50">
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <Border BorderBrush="Gray" BorderThickness="1" Margin="0,10,0,0" Padding="5">
+                <StackPanel>
                     <TextBlock Text="Game Settings" FontWeight="Bold" Margin="0,0,0,10" />
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -257,7 +275,7 @@
                                     <Label Content="Runner ID:" />
                                     <Grid Width="430">
                                         <TextBox
-                                            Text="{Binding ExternalIntegrationEndpoint, UpdateSourceTrigger=PropertyChanged}" />
+                                            Text="{Binding ExternalIntegrationUserId, UpdateSourceTrigger=PropertyChanged}" />
                                         <TextBlock
                                             Text="In case external services requires an identifier to manage multiple users."
                                             FontSize="11" FontStyle="Italic" Foreground="#777"

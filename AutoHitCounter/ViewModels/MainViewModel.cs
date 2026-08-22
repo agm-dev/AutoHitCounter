@@ -29,9 +29,12 @@ namespace AutoHitCounter.ViewModels
         private readonly IRunStateService _runStateService;
         private readonly IGameSessionOrchestrator _orchestrator;
         private readonly ITwitchCategoryService _twitchCategoryService;
+        private readonly IMultirunService _multirunService;
+        private bool _wasRunComplete;
 
-        // Restoring the last session on start-up must not touch anyone's channel.
-        private bool _twitchSyncArmed;
+        // Guards both the multirun broadcast and the Twitch sync: restoring the last session on
+        // start-up must not move a multirun on or touch anyone's channel.
+        private bool _isInitialising;
 
         public SettingsViewModel Settings { get; }
         public HotkeyTabViewModel Hotkeys { get; }
@@ -43,8 +46,10 @@ namespace AutoHitCounter.ViewModels
             ISplitNavigationService splitNavigationService, IExternalIntegrationService externalIntegrationService,
             IGameSessionOrchestrator orchestrator,
             IRunStateService runStateService, ICustomGameService customGameService,
+            IMultirunService multirunService,
             ITwitchCategoryService twitchCategoryService = null)
         {
+            _isInitialising = true;
             Settings = settings;
             _twitchCategoryService = twitchCategoryService;
             Hotkeys = hotkeyTabViewModel;
@@ -68,7 +73,7 @@ namespace AutoHitCounter.ViewModels
                 if (_selectedGame != _orchestrator.ActiveGame) return;
                 CurrentSplit.NumOfHits++;
                 SaveRunState();
-                _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+                BroadcastOverlayState();
 
                 var payload = new HitPayload(_orchestrator.ActiveGame, ActiveProfile, CurrentSplit, TotalHits, TotalPb, InGameTime);
                 await externalIntegrationService.SendHitAsync(payload);
@@ -84,6 +89,9 @@ namespace AutoHitCounter.ViewModels
 
             _runStateService = runStateService;
             _customGameService = customGameService;
+
+            _multirunService = multirunService;
+            _multirunService.Changed += OnMultirunChanged;
 
             RegisterHotkeys();
             
@@ -102,7 +110,9 @@ namespace AutoHitCounter.ViewModels
                 StartTrackingGame();
 
             Settings?.LoadTwitchCategories(Games);
-            _twitchSyncArmed = true;
+
+            _isInitialising = false;
+            _multirunService.Broadcast();
         }
 
         #region Commands
@@ -147,6 +157,8 @@ namespace AutoHitCounter.ViewModels
         public DelegateCommand MoveSplitDownCommand { get; set; }
 
         public DelegateCommand SetDistancePbCommand { get; set; }
+
+        public DelegateCommand RandomizeMultirunCommand { get; set; }
 
         #endregion
 
@@ -213,7 +225,7 @@ namespace AutoHitCounter.ViewModels
                 {
                     _isPracticeMode = false;
                     OnPropertyChanged(nameof(IsPracticeMode));
-                    StartTrackingGame();
+                    TrackGame();
                 }
                 else
                 {
@@ -234,7 +246,7 @@ namespace AutoHitCounter.ViewModels
                     OnPropertyChanged(nameof(TotalDiff));
                     OnPropertyChanged(nameof(TotalHitsBrush));
                     OnPropertyChanged(nameof(TotalPb));
-                    _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+                    BroadcastOverlayState();
                 }
             }
         }
@@ -405,11 +417,13 @@ namespace AutoHitCounter.ViewModels
                 _profileService.SaveProfile(ActiveProfile);
             }
 
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
             NotifyProfileSplitsChanged();
         }
 
         public bool HasSplits => TotalSplitCount > 0;
+
+        public bool IsMultirunEnabled => _multirunService.IsEnabled;
 
         private bool _isSplitListScrollbarVisible;
 
@@ -508,7 +522,7 @@ namespace AutoHitCounter.ViewModels
                 _profileService.SaveProfile(ActiveProfile);
             }
 
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
             NotifyProfileSplitsChanged();
         }
 
@@ -519,7 +533,7 @@ namespace AutoHitCounter.ViewModels
                 _activeProfile.AttemptCount = count;
                 _profileService.SaveProfile(_activeProfile);
                 OnPropertyChanged(nameof(AttemptCount));
-                _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+                BroadcastOverlayState();
             }
 
             IsEditingAttempts = false;
@@ -530,6 +544,7 @@ namespace AutoHitCounter.ViewModels
         public override void Dispose()
         {
             ThemeService.ThemeChanged -= OnThemeChanged;
+            _multirunService.Changed -= OnMultirunChanged;
         }
 
         public void SaveRunState() =>
@@ -556,7 +571,8 @@ namespace AutoHitCounter.ViewModels
         private void InitialiseCommands()
         {
             CheckUpdateCommand = new DelegateCommand(CheckUpdate);
-            TrackGameCommand = new DelegateCommand(StartTrackingGame);
+            TrackGameCommand = new DelegateCommand(TrackGame);
+            RandomizeMultirunCommand = new DelegateCommand(() => _multirunService.Randomize());
             CreateCustomGameCommand = new DelegateCommand(CreateCustomGame);
             DeleteCustomGameCommand = new DelegateCommand(DeleteCustomGame);
             RenameCustomGameCommand = new DelegateCommand(RenameCustomGame);
@@ -595,7 +611,7 @@ namespace AutoHitCounter.ViewModels
             {
                 if (SelectedSplit == null || SelectedSplit.IsParent) return;
                 SelectedSplit.NumOfHits = 0;
-                _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+                BroadcastOverlayState();
             });
 
             ClearTotalPbCommand = new DelegateCommand(() =>
@@ -616,7 +632,7 @@ namespace AutoHitCounter.ViewModels
 
                 _profileService.SaveProfile(_activeProfile);
                 RefreshSplitValues();
-                _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+                BroadcastOverlayState();
             });
 
             EditSplitPbCommand = new DelegateCommand(() =>
@@ -657,8 +673,39 @@ namespace AutoHitCounter.ViewModels
                 });
         }
 
+        /// <summary>
+        /// The multirun only ever follows the game being tracked, so selecting another game or profile
+        /// to look at (or to get ready) leaves the multirun alone until it is tracked.
+        /// </summary>
+        private bool IsTrackingSelectedGame => _selectedGame != null && _selectedGame == _orchestrator.ActiveGame;
+
+        /// <summary>
+        /// Broadcasts the overlay state, keeping the game currently being run on the multirun overlay
+        /// marked in line with the hits of the run.
+        /// </summary>
+        private void BroadcastOverlayState()
+        {
+            if (IsTrackingSelectedGame)
+                _multirunService.SyncHits(_selectedGame.GameName, TotalHits > 0);
+
+            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+        }
+
+        private void OnMultirunChanged() => OnPropertyChanged(nameof(IsMultirunEnabled));
+
+        /// <summary>Moving past the last split completes the game for the multirun and moves on to the next one.</summary>
+        private void TrackRunCompletion()
+        {
+            var wasRunComplete = _wasRunComplete;
+            _wasRunComplete = IsRunComplete;
+
+            if (!wasRunComplete && IsRunComplete && IsTrackingSelectedGame)
+                _multirunService.CompleteGame(_selectedGame.GameName, TotalHits > 0);
+        }
+
         private void OnSplitStateChanged()
         {
+            TrackRunCompletion();
             UpdateDistancePb();
             OnPropertyChanged(nameof(CurrentSplit));
             OnPropertyChanged(nameof(CurrentSplitNumber));
@@ -669,7 +716,7 @@ namespace AutoHitCounter.ViewModels
             SaveRunState();
             if (_orchestrator.ActiveGame == _selectedGame)
                 _orchestrator.UpdateEvents(GetActiveEvents());
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         private void OnOrchestratorAttachmentChanged()
@@ -678,6 +725,20 @@ namespace AutoHitCounter.ViewModels
             AttachedText = _orchestrator.AttachedText;
             AttachmentStatus = _orchestrator.AttachmentStatus;
             OnPropertyChanged(nameof(TrackingText));
+        }
+
+        /// <summary>Tracking started by the user, which is what moves the game to the current spot of a multirun.</summary>
+        private void TrackGame()
+        {
+            if (_selectedGame == null) return;
+            StartTrackingGame();
+            if (_isInitialising) return;
+            _multirunService.OnGameTracked(_selectedGame.GameName);
+            _multirunService.SyncHits(_selectedGame.GameName, TotalHits > 0);
+
+            // Fire and forget: the service swallows its own failures, and a Twitch hiccup must
+            // never stop the tool from tracking hits.
+            _ = _twitchCategoryService?.SyncCategoryAsync(_selectedGame);
         }
 
         private void StartTrackingGame()
@@ -690,11 +751,6 @@ namespace AutoHitCounter.ViewModels
             SettingsManager.Default.Save();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
-
-            // Fire and forget: the service swallows its own failures, and a Twitch hiccup must
-            // never stop the tool from tracking hits.
-            if (_twitchSyncArmed)
-                _ = _twitchCategoryService?.SyncCategoryAsync(_selectedGame);
         }
 
         private void AutoAdvanceSplit()
@@ -710,6 +766,10 @@ namespace AutoHitCounter.ViewModels
             if (_orchestrator.ActiveGame?.IsManual == true) return;
             if (_selectedGame != _orchestrator.ActiveGame) return;
             if (IsPracticeMode) return;
+
+            // Starting over on a game that took hits restarts the multirun from that game.
+            _multirunService.OnNewGameStarted(_selectedGame?.GameName);
+
             if (!SettingsManager.Default.AutoResetOnNewGameStart) return;
             if (!HasRunProgress()) return;
 
@@ -921,7 +981,7 @@ namespace AutoHitCounter.ViewModels
             _activeProfile.DistancePb = index;
             RefreshDistancePbIndicator();
             _profileService.SaveProfile(_activeProfile);
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         private bool CanSetDistancePb() =>
@@ -1137,7 +1197,8 @@ namespace AutoHitCounter.ViewModels
             OnPropertyChanged(nameof(TotalPb));
             OnPropertyChanged(nameof(TotalDiff));
             RefreshDistancePbIndicator();
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            _wasRunComplete = IsRunComplete;
+            BroadcastOverlayState();
         }
 
         private void RestoreSnapshot(RunSnapshot snapshot)
@@ -1156,6 +1217,12 @@ namespace AutoHitCounter.ViewModels
 
         private void ResetSplits()
         {
+            // Resetting the game being tracked by hand starts the multirun over; resetting the splits of
+            // any other game only clears that game's run. The automatic reset on a new game is left to
+            // the multirun's own new game handling.
+            if (IsTrackingSelectedGame)
+                _multirunService.ResetProgress();
+
             ResetRun();
         }
 
@@ -1176,6 +1243,7 @@ namespace AutoHitCounter.ViewModels
             _runStateService.Invalidate(_selectedGame?.GameName, _activeProfile?.Name);
             UpdateSplits();
             _splitNav.InitFresh();
+            _wasRunComplete = false;
 
             _orchestrator.ManualReset();
 
@@ -1188,7 +1256,7 @@ namespace AutoHitCounter.ViewModels
             OnPropertyChanged(nameof(IsRunComplete));
             OnPropertyChanged(nameof(CurrentSplit));
             OnPropertyChanged(nameof(CurrentSplitNumber));
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
             _overlayServerService.BroadcastIgt(InGameTimeFormatted);
         }
 
@@ -1202,7 +1270,7 @@ namespace AutoHitCounter.ViewModels
             }
 
             _profileService.SaveProfile(ActiveProfile);
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         public void CommitPbEdit(SplitViewModel split, string value)
@@ -1221,7 +1289,7 @@ namespace AutoHitCounter.ViewModels
             split.IsEditingPb = false;
             RefreshSplitValues();
             SetDistancePbCommand?.RaiseCanExecuteChanged();
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         private void IncrementHit()
@@ -1229,7 +1297,7 @@ namespace AutoHitCounter.ViewModels
             if (IsRunComplete || CurrentSplit == null || IsPracticeMode) return;
             CurrentSplit.NumOfHits++;
             SaveRunState();
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         private void DecrementHit()
@@ -1237,7 +1305,7 @@ namespace AutoHitCounter.ViewModels
             if (IsRunComplete || CurrentSplit == null || CurrentSplit.NumOfHits <= 0) return;
             CurrentSplit.NumOfHits--;
             SaveRunState();
-            _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
+            BroadcastOverlayState();
         }
 
         private void OnThemeChanged()

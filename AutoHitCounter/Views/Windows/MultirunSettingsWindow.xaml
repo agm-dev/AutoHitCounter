@@ -1,0 +1,271 @@
+<Window x:Class="AutoHitCounter.Views.Windows.MultirunSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
+        xmlns:controls="clr-namespace:AutoHitCounter.Views.Controls"
+        xmlns:converters="clr-namespace:AutoHitCounter.Converters"
+        xmlns:behaviors="clr-namespace:AutoHitCounter.Behaviors"
+        Style="{StaticResource DefaultWindowStyle}"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Title="Multirun Settings"
+        Width="720" Height="560"
+        MinWidth="720" MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        behaviors:WindowResizeBehavior.EnableCustomResize="True">
+
+    <Window.Resources>
+        <converters:SizeToRectConverter x:Key="SizeToRectConverter" />
+
+        <Style x:Key="PanelBorder" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource OverlayPanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="12" />
+        </Style>
+
+        <Style x:Key="PanelHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource OverlayHeaderBrush}" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource OverlaySectionBrush}" />
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource OverlayFieldBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Width" Value="110" />
+        </Style>
+
+        <Style x:Key="ColorRow" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Margin" Value="0,0,0,5" />
+        </Style>
+
+        <Style x:Key="Separator" TargetType="Separator">
+            <Setter Property="Background" Value="{DynamicResource OverlaySeparatorBackgroundBrush}" />
+            <Setter Property="Margin" Value="0,8,0,4" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.Clip>
+            <RectangleGeometry RadiusX="5" RadiusY="5">
+                <RectangleGeometry.Rect>
+                    <MultiBinding Converter="{StaticResource SizeToRectConverter}">
+                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                        <Binding Path="ActualHeight" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                    </MultiBinding>
+                </RectangleGeometry.Rect>
+            </RectangleGeometry>
+        </Grid.Clip>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <controls:TitleBar Grid.Row="0" Title="Multirun Settings" />
+
+        <!-- Focus outline -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                BorderThickness="1" IsHitTestVisible="False" Panel.ZIndex="99"
+                CornerRadius="4" ClipToBounds="True" Background="Transparent">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsActive, RelativeSource={RelativeSource AncestorType=Window}}"
+                                     Value="True">
+                            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+
+        <!-- Enable Bar -->
+        <Border Grid.Row="1" BorderBrush="#2a2a2a" BorderThickness="0,0,0,1" Padding="8,5">
+            <StackPanel Orientation="Horizontal">
+                <CheckBox Content="Enable Multirun" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
+                          Margin="0,0,10,0" />
+                <TextBlock Text="Add Multirun.html as a second browser source in OBS to show the game list."
+                           FontSize="11" FontStyle="Italic"
+                           Foreground="{DynamicResource OverlayCommentsBrush}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- Main content -->
+        <Grid Grid.Row="2" Margin="8,6,8,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT PANEL - Games -->
+            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Margin="0,0,5,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="GAMES" Style="{StaticResource PanelHeader}" />
+
+                    <TextBlock Grid.Row="1" Text="ADD A GAME" Style="{StaticResource SectionLabel}" Margin="0,0,0,4" />
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                        <ComboBox ItemsSource="{Binding AvailableGames}"
+                                  SelectedItem="{Binding SelectedAvailableGame}"
+                                  DisplayMemberPath="GameName"
+                                  Width="220" FontSize="11" Margin="0,0,6,0" />
+                        <Button Content="Add" Command="{Binding AddGameCommand}" FontSize="11" Padding="10,2" />
+                    </StackPanel>
+
+                    <ListBox Grid.Row="3"
+                             ItemsSource="{Binding Entries}"
+                             SelectedItem="{Binding SelectedEntry}"
+                             HorizontalContentAlignment="Stretch">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding GameName}" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Width="70"
+                                             MaxLength="8"
+                                             FontSize="11"
+                                             ToolTip="Abbreviation shown on the multirun overlay"
+                                             ToolTipService.InitialShowDelay="300"
+                                             Text="{Binding Abbreviation, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="▲" Command="{Binding MoveEntryUpCommand}" Width="28" FontSize="10"
+                                Margin="0,0,4,0" />
+                        <Button Content="▼" Command="{Binding MoveEntryDownCommand}" Width="28" FontSize="10"
+                                Margin="0,0,4,0" />
+                        <Button Content="Remove" Command="{Binding RemoveEntryCommand}" FontSize="11" Padding="10,2" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- RIGHT PANEL - Styling -->
+            <Border Grid.Column="1" Style="{StaticResource PanelBorder}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="STYLING" Style="{StaticResource PanelHeader}" />
+
+                        <TextBlock Text="FONT" Style="{StaticResource SectionLabel}" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding AvailableFonts}"
+                                  SelectedItem="{Binding FontFamily}"
+                                  Margin="0,0,0,8"
+                                  FontSize="11" Width="255" HorizontalAlignment="Left">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontFamily="{Binding}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Size" Style="{StaticResource FieldLabel}" Width="90" />
+                            <xctk:IntegerUpDown Value="{Binding FontSize}" Minimum="6" Maximum="120" Width="55" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="Spacing" Style="{StaticResource FieldLabel}" Width="90" />
+                            <xctk:IntegerUpDown Value="{Binding Spacing}" Minimum="0" Maximum="100" Width="55" />
+                        </StackPanel>
+                        <CheckBox Content="Bold" IsChecked="{Binding FontBold}" Margin="0,3,0,3" />
+
+                        <Separator Style="{StaticResource Separator}" />
+                        <TextBlock Text="COLOURS" Style="{StaticResource SectionLabel}" Margin="0,0,0,4" />
+
+                        <StackPanel Style="{StaticResource ColorRow}">
+                            <TextBlock Text="Base" Style="{StaticResource FieldLabel}" Width="80" />
+                            <Border Width="24" Height="22" BorderBrush="#444" BorderThickness="1" Margin="0,0,4,0">
+                                <Rectangle
+                                    Fill="{Binding BaseColor, Converter={StaticResource StringToBrushConverter}}" />
+                            </Border>
+                            <TextBox Text="{Binding BaseColor, UpdateSourceTrigger=PropertyChanged, Delay=400}"
+                                     Width="140" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource ColorRow}">
+                            <TextBlock Text="Completed" Style="{StaticResource FieldLabel}" Width="80" />
+                            <Border Width="24" Height="22" BorderBrush="#444" BorderThickness="1" Margin="0,0,4,0">
+                                <Rectangle
+                                    Fill="{Binding CompletedColor, Converter={StaticResource StringToBrushConverter}}" />
+                            </Border>
+                            <TextBox Text="{Binding CompletedColor, UpdateSourceTrigger=PropertyChanged, Delay=400}"
+                                     Width="140" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource ColorRow}">
+                            <TextBlock Text="Hit" Style="{StaticResource FieldLabel}" Width="80" />
+                            <Border Width="24" Height="22" BorderBrush="#444" BorderThickness="1" Margin="0,0,4,0">
+                                <Rectangle
+                                    Fill="{Binding HitColor, Converter={StaticResource StringToBrushConverter}}" />
+                            </Border>
+                            <TextBox Text="{Binding HitColor, UpdateSourceTrigger=PropertyChanged, Delay=400}"
+                                     Width="140" />
+                        </StackPanel>
+
+                        <StackPanel Style="{StaticResource ColorRow}">
+                            <TextBlock Text="Current Border" Style="{StaticResource FieldLabel}" Width="80" />
+                            <Border Width="24" Height="22" BorderBrush="#444" BorderThickness="1" Margin="0,0,4,0">
+                                <Rectangle
+                                    Fill="{Binding CurrentBorderColor, Converter={StaticResource StringToBrushConverter}}" />
+                            </Border>
+                            <TextBox Text="{Binding CurrentBorderColor, UpdateSourceTrigger=PropertyChanged, Delay=400}"
+                                     Width="140" />
+                        </StackPanel>
+
+                        <Separator Style="{StaticResource Separator}" />
+                        <TextBlock Text="BACKGROUND OPACITY" Style="{StaticResource SectionLabel}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Slider Value="{Binding BackgroundOpacity, Delay=400}" Minimum="0" Maximum="1"
+                                    Width="200" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding BackgroundOpacity, StringFormat={}{0:F2}}"
+                                       Foreground="{DynamicResource OverlayFieldBrush}" FontSize="11" Margin="6,0,0,0"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
+        <!-- Bottom Bar -->
+        <Border Grid.Row="3" BorderBrush="#2a2a2a" BorderThickness="0,1,0,0" Padding="8,6">
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Content="Reset Styling" Command="{Binding ResetStyleCommand}" Margin="0,0,6,0" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Randomize Order" Command="{Binding RandomizeCommand}" Margin="0,0,6,0" />
+                    <Button Content="Reset Progress" Command="{Binding ResetProgressCommand}" Margin="0,0,6,0" />
+                    <Button Content="Close" Click="Close_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
