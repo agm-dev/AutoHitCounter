@@ -11,7 +11,8 @@
             box-sizing: border-box;
         }
 
-        /* Body styling for transparent overlay - the row is pushed to the right edge of the source */
+        /* Body styling for transparent overlay - the row is pushed to the right edge of the source.
+           A full 1080p line of room, so the games never run out of width, and more if the source is wider. */
         body {
             background: transparent;
             font-family: 'Segoe UI', sans-serif;
@@ -19,14 +20,15 @@
             overflow: hidden;
             display: flex;
             justify-content: flex-end;
+            min-width: 1920px;
         }
 
-        /* Single row holding every game of the multirun */
+        /* Single row holding every game of the multirun - never squeezed, so it stays on one line */
         #multirun {
             display: flex;
-            flex-wrap: wrap;
             align-items: center;
             width: max-content;
+            flex-shrink: 0;
             padding: 4px 6px;
         }
 
