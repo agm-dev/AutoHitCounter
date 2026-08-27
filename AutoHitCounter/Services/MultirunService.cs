@@ -53,23 +53,39 @@ public class MultirunService : IMultirunService
     {
         if (config == null) return;
 
-        var previousCurrentGame = CurrentEntry?.GameName;
-        var previousStatuses = _config.Entries
+        var previousCurrent = CurrentEntry;
+        var statusesById = _config.Entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Id))
+            .GroupBy(e => e.Id, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Status, StringComparer.Ordinal);
+        var statusesByGame = _config.Entries
             .GroupBy(e => e.GameName ?? "", StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Status, StringComparer.OrdinalIgnoreCase);
 
-        var updated = Normalize(config.Clone());
+        // The progress is carried over before the ids missing from a hand written setup are filled in,
+        // so that those entries can still fall back to being matched by game name.
+        var updated = config.Clone();
+        updated.Entries ??= new List<MultirunEntry>();
+        updated.Entries.RemoveAll(e => e == null || string.IsNullOrWhiteSpace(e.GameName));
 
-        // Keep the progress of the games that are still part of the multirun.
+        // Keep the progress of the games that are still part of the multirun. Entries are matched by id
+        // rather than by name, because the same game is in the list several times once the multirun is
+        // made of the cycles of a single game.
         foreach (var entry in updated.Entries)
         {
-            if (previousStatuses.TryGetValue(entry.GameName ?? "", out var status))
-                entry.Status = status;
+            var hasId = !string.IsNullOrWhiteSpace(entry.Id);
+            if (hasId && statusesById.TryGetValue(entry.Id, out var byId))
+                entry.Status = byId;
+            else if (!hasId && statusesByGame.TryGetValue(entry.GameName, out var byGame))
+                entry.Status = byGame;
         }
 
-        if (previousCurrentGame != null)
+        if (previousCurrent != null)
         {
-            updated.CurrentIndex = IndexOf(updated.Entries, previousCurrentGame);
+            updated.CurrentIndex = updated.Entries.FindIndex(e =>
+                !string.IsNullOrWhiteSpace(e.Id) && !string.IsNullOrWhiteSpace(previousCurrent.Id)
+                    ? e.Id == previousCurrent.Id
+                    : Matches(e.GameName, previousCurrent.GameName));
             if (updated.CurrentIndex < 0 && updated.Entries.Count > 0)
                 updated.CurrentIndex = 0;
         }
@@ -79,12 +95,14 @@ public class MultirunService : IMultirunService
             updated.CurrentIndex = _config.Entries.Count == 0 && updated.Entries.Count > 0 ? 0 : -1;
         }
 
-        _config = updated;
+        _config = Normalize(updated);
         SaveAndPublish();
     }
 
     public void Randomize()
     {
+        // The order of the cycles of a game is the run itself, so there is nothing to shuffle.
+        if (IsCyclesMode) return;
         if (_config.Entries.Count == 0) return;
 
         for (var i = _config.Entries.Count - 1; i > 0; i--)
@@ -138,11 +156,24 @@ public class MultirunService : IMultirunService
     {
         if (!IsEnabled) return;
 
-        var index = IndexOf(_config.Entries, gameName);
+        var index = IndexOfRelevant(gameName);
         if (index < 0) return;
 
         var currentIndex = _config.CurrentIndex;
         if (index == currentIndex) return;
+
+        if (IsCyclesMode)
+        {
+            // Cycles are never reordered: tracking the game again only picks the multirun back up,
+            // and a finished one starts over.
+            if (currentIndex < 0)
+            {
+                ClearProgress();
+                SaveAndPublish();
+            }
+
+            return;
+        }
 
         // Moving to another game after taking a hit is a restart of the multirun from that game.
         if (HasHitMark)
@@ -170,11 +201,30 @@ public class MultirunService : IMultirunService
     {
         if (!IsEnabled) return;
 
+        if (IsCyclesMode)
+        {
+            HandleCycleRestartSignal(gameName);
+            return;
+        }
+
         var index = IndexOf(_config.Entries, gameName);
         if (index < 0) return;
         if (!HasHitMark) return;
 
         RestartFrom(index);
+    }
+
+    public void OnRunReset(string gameName)
+    {
+        if (!IsEnabled) return;
+
+        if (IsCyclesMode)
+        {
+            HandleCycleRestartSignal(gameName);
+            return;
+        }
+
+        ResetProgress();
     }
 
     public void Broadcast() => _overlayServerService?.BroadcastMultirun(BuildState());
@@ -193,7 +243,11 @@ public class MultirunService : IMultirunService
         return trimmed.Substring(0, Math.Min(3, trimmed.Length)).ToUpperInvariant();
     }
 
+    public string GetDefaultCycleAbbreviation(int cycleIndex) => cycleIndex <= 0 ? "NG" : $"NG+{cycleIndex}";
+
     #region Private Methods
+
+    private bool IsCyclesMode => _config.Mode == MultirunMode.Cycles;
 
     private MultirunEntry CurrentEntry =>
         _config.CurrentIndex >= 0 && _config.CurrentIndex < _config.Entries.Count
@@ -201,6 +255,19 @@ public class MultirunService : IMultirunService
             : null;
 
     private bool HasHitMark => _config.Entries.Any(e => e.Status == MultirunStatus.Hit);
+
+    /// <summary>
+    /// A reset or a new game on the game of a cycles multirun. Without a hit it is simply how the next
+    /// cycle is started, so the progress is left alone; a hit (or a finished multirun) starts it over.
+    /// </summary>
+    private void HandleCycleRestartSignal(string gameName)
+    {
+        if (!Matches(_config.CycleGameName, gameName)) return;
+        if (!HasHitMark && _config.CurrentIndex >= 0) return;
+
+        ClearProgress();
+        SaveAndPublish();
+    }
 
     /// <summary>Starts the multirun over with the given game first and current.</summary>
     private void RestartFrom(int index)
@@ -262,6 +329,17 @@ public class MultirunService : IMultirunService
         config.Entries ??= new List<MultirunEntry>();
         config.Entries.RemoveAll(e => e == null || string.IsNullOrWhiteSpace(e.GameName));
 
+        config.GameEntries ??= new List<MultirunEntry>();
+        config.GameEntries.RemoveAll(e => e == null || string.IsNullOrWhiteSpace(e.GameName));
+
+        // Settings files written before entries had an identity, and any hand edited one, get ids here.
+        foreach (var entry in config.Entries.Concat(config.GameEntries))
+            if (string.IsNullOrWhiteSpace(entry.Id))
+                entry.Id = Guid.NewGuid().ToString();
+
+        if (config.CycleCount < MultirunConfig.MinCycleCount) config.CycleCount = MultirunConfig.DefaultCycleCount;
+        if (config.CycleCount > MultirunConfig.MaxCycleCount) config.CycleCount = MultirunConfig.MaxCycleCount;
+
         if (string.IsNullOrWhiteSpace(config.FontFamily)) config.FontFamily = defaults.FontFamily;
         if (config.FontSize <= 0) config.FontSize = defaults.FontSize;
         if (config.Spacing < 0) config.Spacing = defaults.Spacing;
@@ -280,6 +358,15 @@ public class MultirunService : IMultirunService
 
         return config;
     }
+
+    /// <summary>
+    /// The occurrence of the game the multirun is already on, or its first one. Keeps a multirun made of
+    /// several cycles of one game from snapping back to the first cycle every time the game comes up.
+    /// </summary>
+    private int IndexOfRelevant(string gameName) =>
+        CurrentEntry != null && Matches(CurrentEntry.GameName, gameName)
+            ? _config.CurrentIndex
+            : IndexOf(_config.Entries, gameName);
 
     private static int IndexOf(List<MultirunEntry> entries, string gameName) =>
         entries.FindIndex(e => Matches(e.GameName, gameName));

@@ -37,14 +37,26 @@ public interface IMultirunService
     /// </summary>
     void OnGameTracked(string gameName);
 
-    /// <summary>Restarts the multirun from the given game when any game is marked with a hit.</summary>
+    /// <summary>
+    /// A new game was detected. Restarts the multirun from the given game when any game is marked with a hit;
+    /// in a cycles multirun a clean new game is just the start of the next cycle and leaves the progress alone.
+    /// </summary>
     void OnNewGameStarted(string gameName);
+
+    /// <summary>
+    /// The run of the tracked game was reset by hand. Restarts the multirun, except in a cycles multirun with
+    /// no hit taken, where the reset is how the next cycle is started.
+    /// </summary>
+    void OnRunReset(string gameName);
 
     /// <summary>Sends the current state to the overlay.</summary>
     void Broadcast();
 
     /// <summary>Default abbreviations for the games known to the app, used when a game is added to a multirun.</summary>
     string GetDefaultAbbreviation(string gameName);
+
+    /// <summary>Default label of a cycle of a same game multirun: "NG", "NG+1", "NG+2"...</summary>
+    string GetDefaultCycleAbbreviation(int cycleIndex);
 
     IReadOnlyList<MultirunEntry> Entries { get; }
 }

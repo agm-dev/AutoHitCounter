@@ -135,6 +135,7 @@
     <Compile Include="Enums\AttachmentStatus.cs" />
     <Compile Include="Enums\GameTitle.cs" />
     <Compile Include="Enums\HotkeyActions.cs" />
+    <Compile Include="Enums\MultirunMode.cs" />
     <Compile Include="Enums\MultirunStatus.cs" />
     <Compile Include="Enums\SplitType.cs" />
     <Compile Include="Enums\NotesDisplayMode.cs" />

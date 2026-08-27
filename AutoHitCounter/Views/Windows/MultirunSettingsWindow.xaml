@@ -18,6 +18,7 @@
 
     <Window.Resources>
         <converters:SizeToRectConverter x:Key="SizeToRectConverter" />
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
 
         <Style x:Key="PanelBorder" TargetType="Border">
             <Setter Property="BorderBrush" Value="{DynamicResource OverlayPanelBorderBrush}" />
@@ -96,13 +97,23 @@
 
         <!-- Enable Bar -->
         <Border Grid.Row="1" BorderBrush="#2a2a2a" BorderThickness="0,0,0,1" Padding="8,5">
-            <StackPanel Orientation="Horizontal">
-                <CheckBox Content="Enable Multirun" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
-                          Margin="0,0,10,0" />
-                <TextBlock Text="Add Multirun.html as a second browser source in OBS to show the game list."
-                           FontSize="11" FontStyle="Italic"
-                           Foreground="{DynamicResource OverlayCommentsBrush}"
-                           VerticalAlignment="Center" />
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <CheckBox Content="Enable Multirun" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
+                              Margin="0,0,10,0" />
+                    <TextBlock Text="Add Multirun.html as a second browser source in OBS to show the game list."
+                               FontSize="11" FontStyle="Italic"
+                               Foreground="{DynamicResource OverlayCommentsBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <TextBlock Text="Mode" Style="{StaticResource FieldLabel}" Width="Auto" Margin="0,0,10,0" />
+                    <RadioButton Content="Several games" GroupName="MultirunMode"
+                                 IsChecked="{Binding IsGamesMode}" VerticalAlignment="Center"
+                                 Margin="0,0,12,0" />
+                    <RadioButton Content="Same game (NG cycles)" GroupName="MultirunMode"
+                                 IsChecked="{Binding IsCyclesMode}" VerticalAlignment="Center" />
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -113,8 +124,9 @@
                 <ColumnDefinition Width="300" />
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT PANEL - Games -->
-            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Margin="0,0,5,0">
+            <!-- LEFT PANEL - Games (several games mode) -->
+            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Margin="0,0,5,0"
+                    Visibility="{Binding IsGamesMode, Converter={StaticResource BoolToVisConverter}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -147,7 +159,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding GameName}" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}" VerticalAlignment="Center" />
                                     <TextBox Grid.Column="1" Width="70"
                                              MaxLength="8"
                                              FontSize="11"
@@ -166,6 +178,65 @@
                                 Margin="0,0,4,0" />
                         <Button Content="Remove" Command="{Binding RemoveEntryCommand}" FontSize="11" Padding="10,2" />
                     </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- LEFT PANEL - Cycles (same game mode) -->
+            <Border Grid.Column="0" Style="{StaticResource PanelBorder}" Margin="0,0,5,0"
+                    Visibility="{Binding IsCyclesMode, Converter={StaticResource BoolToVisConverter}}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="CYCLES" Style="{StaticResource PanelHeader}" />
+
+                    <TextBlock Grid.Row="1"
+                               Text="Run the same game over and over, one entry per new game cycle."
+                               FontSize="11" FontStyle="Italic" TextWrapping="Wrap"
+                               Foreground="{DynamicResource OverlayCommentsBrush}"
+                               Margin="0,0,0,8" />
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Text="Game" Style="{StaticResource FieldLabel}" Width="60" />
+                        <ComboBox ItemsSource="{Binding AllGames}"
+                                  SelectedItem="{Binding CycleGame}"
+                                  DisplayMemberPath="GameName"
+                                  Width="220" FontSize="11" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Times" Style="{StaticResource FieldLabel}" Width="60" />
+                        <xctk:IntegerUpDown Value="{Binding CycleCount}" Minimum="1" Maximum="20" Width="55" />
+                    </StackPanel>
+
+                    <ListBox Grid.Row="4"
+                             ItemsSource="{Binding Entries}"
+                             SelectedItem="{Binding SelectedEntry}"
+                             HorizontalContentAlignment="Stretch">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2,0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding DisplayName}"
+                                               VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Width="70"
+                                             MaxLength="8"
+                                             FontSize="11"
+                                             ToolTip="Abbreviation shown on the multirun overlay"
+                                             ToolTipService.InitialShowDelay="300"
+                                             Text="{Binding Abbreviation, UpdateSourceTrigger=PropertyChanged, Delay=400}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Grid>
             </Border>
 
@@ -261,7 +332,8 @@
                     <Button Content="Reset Styling" Command="{Binding ResetStyleCommand}" Margin="0,0,6,0" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Randomize Order" Command="{Binding RandomizeCommand}" Margin="0,0,6,0" />
+                    <Button Content="Randomize Order" Command="{Binding RandomizeCommand}" Margin="0,0,6,0"
+                            Visibility="{Binding IsGamesMode, Converter={StaticResource BoolToVisConverter}}" />
                     <Button Content="Reset Progress" Command="{Binding ResetProgressCommand}" Margin="0,0,6,0" />
                     <Button Content="Close" Click="Close_Click" />
                 </StackPanel>

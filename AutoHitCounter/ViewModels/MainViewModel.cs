@@ -425,6 +425,10 @@ namespace AutoHitCounter.ViewModels
 
         public bool IsMultirunEnabled => _multirunService.IsEnabled;
 
+        /// <summary>The order of a multirun made of the cycles of one game is the run itself, so there is nothing to shuffle.</summary>
+        public bool CanRandomizeMultirun =>
+            _multirunService.IsEnabled && _multirunService.Config?.Mode == MultirunMode.Games;
+
         private bool _isSplitListScrollbarVisible;
 
         public bool IsSplitListScrollbarVisible
@@ -691,7 +695,11 @@ namespace AutoHitCounter.ViewModels
             _overlayServerService.BroadcastState(OverlayMapper.MapFrom(this));
         }
 
-        private void OnMultirunChanged() => OnPropertyChanged(nameof(IsMultirunEnabled));
+        private void OnMultirunChanged()
+        {
+            OnPropertyChanged(nameof(IsMultirunEnabled));
+            OnPropertyChanged(nameof(CanRandomizeMultirun));
+        }
 
         /// <summary>Moving past the last split completes the game for the multirun and moves on to the next one.</summary>
         private void TrackRunCompletion()
@@ -1221,7 +1229,7 @@ namespace AutoHitCounter.ViewModels
             // any other game only clears that game's run. The automatic reset on a new game is left to
             // the multirun's own new game handling.
             if (IsTrackingSelectedGame)
-                _multirunService.ResetProgress();
+                _multirunService.OnRunReset(_selectedGame.GameName);
 
             ResetRun();
         }
