@@ -84,6 +84,7 @@
     <Compile Include="Services\SplitNavigationServiceTests.cs" />
     <Compile Include="Services\TwitchCategoryServiceTests.cs" />
     <Compile Include="ViewModels\MainViewModelTests.cs" />
+    <Compile Include="ViewModels\MultirunSettingsViewModelTests.cs" />
     <Compile Include="ViewModels\ProfileEditorViewModelTests.cs" />
   </ItemGroup>
   <ItemGroup>

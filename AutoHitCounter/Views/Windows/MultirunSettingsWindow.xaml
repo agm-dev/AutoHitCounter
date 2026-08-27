@@ -108,10 +108,13 @@
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                     <TextBlock Text="Mode" Style="{StaticResource FieldLabel}" Width="Auto" Margin="0,0,10,0" />
-                    <RadioButton Content="Several games" GroupName="MultirunMode"
+                    <!-- No GroupName: it groups radio buttons across the whole app, and this window is
+                         opened again and again on the same view model, so a closed one would still be
+                         unchecking the new one and writing that back. The panel groups them already. -->
+                    <RadioButton Content="Several games"
                                  IsChecked="{Binding IsGamesMode}" VerticalAlignment="Center"
                                  Margin="0,0,12,0" />
-                    <RadioButton Content="Same game (NG cycles)" GroupName="MultirunMode"
+                    <RadioButton Content="Same game (NG cycles)"
                                  IsChecked="{Binding IsCyclesMode}" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
