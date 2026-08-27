@@ -6,3 +6,4 @@ riderModule.iml
 .vs/
 .vscode/
 AutoHitCounter/FodyWeavers.xsd
+.claude/

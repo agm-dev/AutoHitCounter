@@ -173,10 +173,10 @@
 
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
                                     Margin="0,1,-2,5">
-                            <!-- Randomize Multirun Button - only while a multirun is set up -->
+                            <!-- Randomize Multirun Button - only while a multirun of several games is set up -->
                             <Button Content="&#xE8B1;"
                                     Command="{Binding RandomizeMultirunCommand}"
-                                    Visibility="{Binding IsMultirunEnabled, Converter={StaticResource BoolToVisConverter}}"
+                                    Visibility="{Binding CanRandomizeMultirun, Converter={StaticResource BoolToVisConverter}}"
                                     Width="30" Height="22.1"
                                     FontSize="13" Padding="0,0,0,1"
                                     FontFamily="Segoe MDL2 Assets"

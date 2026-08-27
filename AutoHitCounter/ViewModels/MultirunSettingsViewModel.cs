@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Media;
 using AutoHitCounter.Core;
+using AutoHitCounter.Enums;
 using AutoHitCounter.Interfaces;
 using AutoHitCounter.Models;
 using AutoHitCounter.Utilities;
@@ -32,7 +33,7 @@ public class MultirunSettingsViewModel : BaseViewModel
         RemoveEntryCommand = new DelegateCommand(RemoveEntry, () => SelectedEntry != null);
         MoveEntryUpCommand = new DelegateCommand(MoveEntryUp, CanMoveEntryUp);
         MoveEntryDownCommand = new DelegateCommand(MoveEntryDown, CanMoveEntryDown);
-        RandomizeCommand = new DelegateCommand(() => _multirunService.Randomize());
+        RandomizeCommand = new DelegateCommand(() => _multirunService.Randomize(), () => IsGamesMode);
         ResetProgressCommand = new DelegateCommand(() => _multirunService.ResetProgress());
         ResetStyleCommand = new DelegateCommand(ResetStyle);
 
@@ -60,7 +61,11 @@ public class MultirunSettingsViewModel : BaseViewModel
         .OrderBy(f => f)
         .ToList();
 
+    /// <summary>Games that can still be added to a multirun of several games.</summary>
     public ObservableCollection<Game> AvailableGames { get; } = new();
+
+    /// <summary>Every game known to the app, to pick the one a same game multirun cycles through.</summary>
+    public ObservableCollection<Game> AllGames { get; } = new();
 
     public ObservableCollection<MultirunEntryViewModel> Entries { get; } = new();
 
@@ -98,6 +103,64 @@ public class MultirunSettingsViewModel : BaseViewModel
         set
         {
             if (!SetProperty(ref _isEnabled, value)) return;
+            Apply();
+        }
+    }
+
+    private bool _isCyclesMode;
+
+    // Both modes are the two halves of one flag, so only a radio button being checked says anything:
+    // acting on the unchecked one as well would have each of them undoing the other for ever.
+
+    /// <summary>The multirun is several cycles (NG, NG+1...) of a single game instead of a list of games.</summary>
+    public bool IsCyclesMode
+    {
+        get => _isCyclesMode;
+        set
+        {
+            if (value) SetMode(cycles: true);
+        }
+    }
+
+    public bool IsGamesMode
+    {
+        get => !_isCyclesMode;
+        set
+        {
+            if (value) SetMode(cycles: false);
+        }
+    }
+
+    private Game _cycleGame;
+
+    public Game CycleGame
+    {
+        get => _cycleGame;
+        set
+        {
+            if (_isLoading) return;
+            if (!SetProperty(ref _cycleGame, value)) return;
+            if (!IsCyclesMode) return;
+
+            RegenerateCycleEntries();
+            Apply();
+        }
+    }
+
+    private int _cycleCount;
+
+    public int CycleCount
+    {
+        get => _cycleCount;
+        set
+        {
+            if (_isLoading) return;
+
+            var clamped = Math.Max(MultirunConfig.MinCycleCount, Math.Min(MultirunConfig.MaxCycleCount, value));
+            if (!SetProperty(ref _cycleCount, clamped)) return;
+            if (!IsCyclesMode) return;
+
+            RegenerateCycleEntries();
             Apply();
         }
     }
@@ -240,12 +303,15 @@ public class MultirunSettingsViewModel : BaseViewModel
 
     private void LoadFromService()
     {
+        var wasLoading = _isLoading;
         _isLoading = true;
         try
         {
             var config = _multirunService.Config;
 
             _isEnabled = config.Enabled;
+            _isCyclesMode = config.Mode == MultirunMode.Cycles;
+            _cycleCount = config.CycleCount;
             _fontFamily = config.FontFamily;
             _fontSize = config.FontSize;
             _fontBold = config.FontBold;
@@ -256,40 +322,143 @@ public class MultirunSettingsViewModel : BaseViewModel
             _hitColor = config.HitColor;
             _currentBorderColor = config.CurrentBorderColor;
 
-            var selectedGameName = SelectedEntry?.GameName;
+            var selectedId = SelectedEntry?.Id;
 
-            foreach (var entry in Entries)
-                entry.Dispose();
-            Entries.Clear();
+            LoadEntries(config.Entries);
 
-            foreach (var entry in config.Entries)
-                Entries.Add(new MultirunEntryViewModel(entry.GameName, entry.Abbreviation, Apply));
-
-            SelectedEntry = Entries.FirstOrDefault(e => e.GameName == selectedGameName);
+            SelectedEntry = Entries.FirstOrDefault(e => e.Id == selectedId);
 
             OnPropertyChanged(string.Empty);
         }
         finally
         {
-            _isLoading = false;
+            _isLoading = wasLoading;
+        }
+
+        RandomizeCommand.RaiseCanExecuteChanged();
+    }
+
+    private void LoadEntries(IEnumerable<MultirunEntry> entries)
+    {
+        foreach (var entry in Entries)
+            entry.Dispose();
+        Entries.Clear();
+
+        var cycleIndex = 0;
+        foreach (var entry in entries)
+        {
+            Entries.Add(new MultirunEntryViewModel(
+                entry.Id,
+                entry.GameName,
+                IsCyclesMode ? _multirunService.GetDefaultCycleAbbreviation(cycleIndex) : entry.GameName,
+                entry.Abbreviation,
+                Apply));
+            cycleIndex++;
         }
     }
 
+    /// <summary>
+    /// Rebuilds the game lists. Emptying a list drops the selection of the combo box bound to it, which a two way
+    /// binding writes straight back, so the whole thing counts as loading: a refresh must never change the multirun.
+    /// </summary>
     private void RefreshAvailableGames()
     {
-        var selectedGameName = SelectedAvailableGame?.GameName;
+        var wasLoading = _isLoading;
+        _isLoading = true;
+        try
+        {
+            var selectedGameName = SelectedAvailableGame?.GameName;
+            var cycleGameName = _cycleGame?.GameName ?? _multirunService.Config.CycleGameName;
 
-        var games = _gameModuleFactory.GetRegisteredGames()
-            .Concat(_customGameService.Load())
-            .Where(game => Entries.All(e => !string.Equals(e.GameName, game.GameName,
-                StringComparison.OrdinalIgnoreCase)))
-            .ToList();
+            var games = _gameModuleFactory.GetRegisteredGames()
+                .Concat(_customGameService.Load())
+                .ToList();
 
-        AvailableGames.Clear();
-        foreach (var game in games)
-            AvailableGames.Add(game);
+            AllGames.Clear();
+            foreach (var game in games)
+                AllGames.Add(game);
 
-        SelectedAvailableGame = AvailableGames.FirstOrDefault(g => g.GameName == selectedGameName);
+            // A game can only be added once to a multirun of several games; the cycles of a single game
+            // are picked from the full list instead.
+            AvailableGames.Clear();
+            foreach (var game in games.Where(game => Entries.All(e => !string.Equals(e.GameName, game.GameName,
+                         StringComparison.OrdinalIgnoreCase))))
+                AvailableGames.Add(game);
+
+            SelectedAvailableGame = AvailableGames.FirstOrDefault(g => g.GameName == selectedGameName);
+
+            // The game instances are rebuilt on every read, so the selection is re-resolved by name.
+            _cycleGame = AllGames.FirstOrDefault(g =>
+                string.Equals(g.GameName, cycleGameName, StringComparison.OrdinalIgnoreCase));
+            OnPropertyChanged(nameof(CycleGame));
+        }
+        finally
+        {
+            _isLoading = wasLoading;
+        }
+    }
+
+    private void SetMode(bool cycles)
+    {
+        if (_isCyclesMode == cycles) return;
+
+        _isCyclesMode = cycles;
+        OnPropertyChanged(nameof(IsCyclesMode));
+        OnPropertyChanged(nameof(IsGamesMode));
+
+        if (_isLoading) return;
+
+        RebuildEntriesForMode();
+        Apply();
+        RefreshAvailableGames();
+        RandomizeCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>Swaps the entry list for the setup of the mode being switched to.</summary>
+    private void RebuildEntriesForMode()
+    {
+        if (IsCyclesMode)
+        {
+            // Dropped first so the cycles are built from scratch instead of inheriting the list of games.
+            LoadEntries(Array.Empty<MultirunEntry>());
+            RegenerateCycleEntries();
+        }
+        else
+        {
+            LoadEntries(_multirunService.Config.GameEntries);
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the list of cycles. Growing or shrinking it keeps the entries that stay (and so their progress),
+    /// while picking another game starts a different multirun altogether.
+    /// </summary>
+    private void RegenerateCycleEntries()
+    {
+        var gameName = CycleGame?.GameName;
+        if (string.IsNullOrWhiteSpace(gameName))
+        {
+            LoadEntries(Array.Empty<MultirunEntry>());
+            return;
+        }
+
+        var reusable = Entries.All(e => string.Equals(e.GameName, gameName, StringComparison.OrdinalIgnoreCase))
+            ? Entries.ToList()
+            : new List<MultirunEntryViewModel>();
+
+        var rebuilt = new List<MultirunEntry>();
+        for (var i = 0; i < CycleCount; i++)
+        {
+            var existing = i < reusable.Count ? reusable[i] : null;
+            rebuilt.Add(new MultirunEntry
+            {
+                Id = existing?.Id ?? Guid.NewGuid().ToString(),
+                GameName = gameName,
+                Abbreviation = existing?.Abbreviation ?? _multirunService.GetDefaultCycleAbbreviation(i)
+            });
+        }
+
+        LoadEntries(rebuilt);
     }
 
     private void AddGame()
@@ -298,6 +467,8 @@ public class MultirunSettingsViewModel : BaseViewModel
         if (game == null) return;
 
         Entries.Add(new MultirunEntryViewModel(
+            Guid.NewGuid().ToString(),
+            game.GameName,
             game.GameName,
             _multirunService.GetDefaultAbbreviation(game.GameName),
             Apply));
@@ -380,6 +551,9 @@ public class MultirunSettingsViewModel : BaseViewModel
 
         var config = _multirunService.Config.Clone();
         config.Enabled = IsEnabled;
+        config.Mode = IsCyclesMode ? MultirunMode.Cycles : MultirunMode.Games;
+        config.CycleGameName = CycleGame?.GameName;
+        config.CycleCount = CycleCount;
         config.FontFamily = FontFamily;
         config.FontSize = FontSize;
         config.FontBold = FontBold;
@@ -391,9 +565,20 @@ public class MultirunSettingsViewModel : BaseViewModel
         config.CurrentBorderColor = CurrentBorderColor;
         config.Entries = Entries.Select(e => new MultirunEntry
         {
+            Id = e.Id,
             GameName = e.GameName,
             Abbreviation = e.Abbreviation
         }).ToList();
+
+        // The list of games is only rewritten while it is the one on screen, so that it is still there
+        // after going to a same game multirun and back.
+        if (IsGamesMode)
+            config.GameEntries = config.Entries.Select(e => new MultirunEntry
+            {
+                Id = e.Id,
+                GameName = e.GameName,
+                Abbreviation = e.Abbreviation
+            }).ToList();
 
         _isApplying = true;
         try

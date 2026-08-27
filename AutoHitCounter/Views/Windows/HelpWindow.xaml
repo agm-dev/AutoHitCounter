@@ -667,6 +667,9 @@
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
                                        Margin="0,10,5,0" LineHeight="22">
                                 A multirun is a run made of several games, for example DS1 into DS2 into DS3 into Elden Ring. The tool keeps the hit counter working exactly as always, one game and one profile at a time, and adds a second overlay showing the games of your run and how far along you are.
+                                <LineBreak />
+                                <LineBreak />
+                                It can also be several cycles of a single game: every NG+ of Elden Ring, for instance, shown as NG, NG+1, NG+2 and so on. Pick which one you are doing with the Mode switch at the top of the multirun settings.
                             </TextBlock>
 
                             <!-- Setting it up -->
@@ -678,16 +681,22 @@
 
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
                                        Margin="0,10,5,0" LineHeight="22">
-                                Go to the Settings tab and click "Open Multirun Settings", then tick "Enable Multirun".
+                                Go to the Settings tab and click "Open Multirun Settings", then tick "Enable Multirun" and choose the mode: "Several games" or "Same game (NG cycles)".
                                 <LineBreak />
                                 <LineBreak />
-                                Pick a game from the dropdown and click "Add", once for every game of your run. Custom games you created yourself can be added too, so games without auto tracking (Demon's Souls, Bloodborne...) can be part of a multirun as well.
+                                With "Several games": pick a game from the dropdown and click "Add", once for every game of your run. Custom games you created yourself can be added too, so games without auto tracking (Demon's Souls, Bloodborne...) can be part of a multirun as well.
                                 <LineBreak />
                                 <LineBreak />
                                 Every game gets an abbreviation (DS1, DS2, ER...), which is what the overlay shows. The box next to each game name is yours to edit if you would rather show something else, up to 8 characters.
                                 <LineBreak />
                                 <LineBreak />
                                 Use the up and down arrows to set the order of the games, and "Remove" to take one out of the run.
+                                <LineBreak />
+                                <LineBreak />
+                                With "Same game (NG cycles)": pick the game once and set how many times you are going through it, up to 20. The list fills itself in with one entry per cycle, labelled NG, NG+1, NG+2 and so on, and there is nothing to order or remove. Their abbreviations are yours to edit just the same.
+                                <LineBreak />
+                                <LineBreak />
+                                The two setups are kept apart, so switching from one mode to the other and back does not cost you the list of games you had put together.
                                 <LineBreak />
                                 <LineBreak />
                                 The panel on the right sets how the overlay looks: font, size, spacing between games, background opacity, and the colours for a game not played yet, a game completed hitless, a game that took hits, and the outline of the game being run. Everything applies straight away, so you can leave the overlay on screen while you tweak it.
@@ -753,6 +762,30 @@
                                 6. Click "Track" on it and keep going. If the game you tracked was further down the list, it is moved up to the spot you are on, so you are free to play the games in whatever order you feel like.
                             </TextBlock>
 
+                            <!-- Running cycles of one game -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Running the cycles of one game
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                Steps 2 to 4 are exactly the same: select the game and the profile, click "Track", play, and NG turns green when you go past the last split while the outline moves on to NG+1.
+                                <LineBreak />
+                                <LineBreak />
+                                What changes is what comes next. You are staying on the same game, so all you do is reset the splits (or start the new game, which resets them for you if you have that turned on) and carry on into NG+1. Because there was no hit, resetting does not start the multirun over, it just gets you ready for the cycle you are already on.
+                                <LineBreak />
+                                <LineBreak />
+                                Take a hit and it works the other way round: the cycle you are on turns red, and resetting or starting a new game puts the whole multirun back to NG with every mark cleared. That is the run over, same as with a multirun of several games.
+                                <LineBreak />
+                                <LineBreak />
+                                Finish the last cycle and the run is done, with the whole line green on screen. Resetting from there starts a fresh multirun back at NG.
+                                <LineBreak />
+                                <LineBreak />
+                                There is no shuffle button in this mode: the order of the cycles is the run itself.
+                            </TextBlock>
+
                             <!-- Starting over -->
                             <TextBlock FontSize="15" FontWeight="SemiBold"
                                        Margin="0,0,0,10">
@@ -765,7 +798,7 @@
                                 The shuffle button randomizes the games and starts the multirun over.
                                 <LineBreak />
                                 <LineBreak />
-                                Resetting the run of the game you are tracking starts the multirun over too, keeping the order and putting you back on the first game of the list.
+                                Resetting the run of the game you are tracking starts the multirun over too, keeping the order and putting you back on the first game of the list. In a multirun of the cycles of one game a reset only does that when you have taken a hit, because there it is also how you move on to the next cycle.
                                 <LineBreak />
                                 <LineBreak />
                                 Once a game is marked red the multirun is over, and there are two ways to go again: start a new game on it, and the multirun restarts from that game, or track a different game of your list, and the multirun restarts from the one you just went to. Either way the list is put back in order behind it with every mark cleared.

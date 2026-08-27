@@ -23,6 +23,7 @@ public class MultirunServiceTests
         _store.Config.Enabled = enabled;
         _store.Config.Entries = games.Select(g => new MultirunEntry
         {
+            Id = Guid.NewGuid().ToString(),
             GameName = g,
             Abbreviation = g
         }).ToList();
@@ -31,10 +32,31 @@ public class MultirunServiceTests
         return new MultirunService(_store, _overlayServerService);
     }
 
+    /// <summary>A multirun made of several cycles (NG, NG+1...) of a single game.</summary>
+    private MultirunService CreateCyclesSut(string game, int count, bool enabled = true)
+    {
+        _store.Config = MultirunConfig.CreateDefault();
+        _store.Config.Enabled = enabled;
+        _store.Config.Mode = MultirunMode.Cycles;
+        _store.Config.CycleGameName = game;
+        _store.Config.CycleCount = count;
+        _store.Config.Entries = Enumerable.Range(0, count).Select(i => new MultirunEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            GameName = game,
+            Abbreviation = i == 0 ? "NG" : $"NG+{i}"
+        }).ToList();
+        _store.Config.CurrentIndex = count > 0 ? 0 : -1;
+
+        return new MultirunService(_store, _overlayServerService);
+    }
+
     private static IEnumerable<string> Order(MultirunService sut) => sut.Entries.Select(e => e.GameName);
 
     private static MultirunStatus StatusOf(MultirunService sut, string game) =>
         sut.Entries.First(e => e.GameName == game).Status;
+
+    private static MultirunStatus StatusAt(MultirunService sut, int index) => sut.Entries[index].Status;
 
     #region Completing games
 
@@ -384,6 +406,197 @@ public class MultirunServiceTests
         var sut = CreateSut();
 
         Assert.Equal("NIO", sut.GetDefaultAbbreviation("Nioh"));
+    }
+
+    #endregion
+
+    #region Cycles of a single game
+
+    [Fact]
+    public void CompleteGame_OnACyclesMultirun_WalksThroughTheRepeatedEntries()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+
+        sut.CompleteGame("Elden Ring", hasHits: false);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 1));
+        Assert.Equal(MultirunStatus.Pending, StatusAt(sut, 2));
+        Assert.Equal(2, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnACyclesMultirunWithoutHits_MovesOnToTheNextCycle()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.OnRunReset("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnACyclesMultirunAfterAHit_StartsItOver()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+        sut.SyncHits("Elden Ring", hasHits: true);
+
+        sut.OnRunReset("Elden Ring");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_AfterCompletingTheLastCycle_StartsTheMultirunOver()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 2);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+        Assert.Equal(-1, sut.Config.CurrentIndex);
+
+        sut.OnRunReset("Elden Ring");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnACyclesMultirunOfAnotherGame_IsIgnored()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.OnRunReset("Sekiro");
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnAMultirunOfSeveralGames_StartsItOver()
+    {
+        var sut = CreateSut(true, "DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: false);
+
+        sut.OnRunReset("DS2");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnNewGameStarted_OnACyclesMultirunWithoutHits_MovesOnToTheNextCycle()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.OnNewGameStarted("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnNewGameStarted_OnACyclesMultirunAfterAHit_StartsItOver()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+
+        sut.OnNewGameStarted("Elden Ring");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_OnACyclesMultirunAlreadyUnderWay_KeepsTheCycleItIsOn()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.OnGameTracked("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_OnAFinishedCyclesMultirun_StartsItOver()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 2);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.OnGameTracked("Elden Ring");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void Randomize_OnACyclesMultirun_LeavesItAlone()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.Randomize();
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void UpdateConfig_OnACyclesMultirun_KeepsTheProgressOfEachCycleApart()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        // Same entries with a renamed abbreviation, as the settings panel would send them.
+        var config = sut.Config.Clone();
+        config.Entries[2].Abbreviation = "NG+2!";
+        sut.UpdateConfig(config);
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(MultirunStatus.Pending, StatusAt(sut, 1));
+        Assert.Equal(MultirunStatus.Pending, StatusAt(sut, 2));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void UpdateConfig_AddingACycle_LeavesTheNewOnePending()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 2);
+        sut.CompleteGame("Elden Ring", hasHits: false);
+
+        var config = sut.Config.Clone();
+        config.CycleCount = 3;
+        config.Entries.Add(new MultirunEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            GameName = "Elden Ring",
+            Abbreviation = "NG+2"
+        });
+        sut.UpdateConfig(config);
+
+        Assert.Equal(MultirunStatus.Completed, StatusAt(sut, 0));
+        Assert.Equal(MultirunStatus.Pending, StatusAt(sut, 2));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Theory]
+    [InlineData(0, "NG")]
+    [InlineData(1, "NG+1")]
+    [InlineData(6, "NG+6")]
+    public void GetDefaultCycleAbbreviation_LabelsEachCycle(int cycleIndex, string expected)
+    {
+        var sut = CreateSut();
+
+        Assert.Equal(expected, sut.GetDefaultCycleAbbreviation(cycleIndex));
     }
 
     #endregion

@@ -568,14 +568,14 @@ public class MainViewModelTests
     }
 
     [Fact]
-    public void Reset_WhenTrackingTheSelectedGame_RestartsTheMultirun()
+    public void Reset_WhenTrackingTheSelectedGame_TellsTheMultirunTheRunWasReset()
     {
-        SelectGame(tracked: true);
+        var game = SelectGame(tracked: true);
         _multirunService.ClearReceivedCalls();
 
         _sut.ResetCommand.Execute(null);
 
-        _multirunService.Received().ResetProgress();
+        _multirunService.Received().OnRunReset(game.GameName);
     }
 
     [Fact]
@@ -586,7 +586,7 @@ public class MainViewModelTests
 
         _sut.ResetCommand.Execute(null);
 
-        _multirunService.DidNotReceive().ResetProgress();
+        _multirunService.DidNotReceive().OnRunReset(Arg.Any<string>());
     }
 
     [Fact]
