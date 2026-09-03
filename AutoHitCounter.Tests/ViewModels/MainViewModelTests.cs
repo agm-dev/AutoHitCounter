@@ -29,20 +29,27 @@ public class MainViewModelTests : IDisposable
 
     private readonly MainViewModel _sut;
 
-    // Setting a profile has the view model persist the settings, so a test that leans on one has to put it
-    // back the way it found it or it rewrites the settings of whoever runs the suite.
+    // Selecting a game or a profile has the view model write the settings out, so the whole class has to
+    // put them back the way it found them or the suite rewrites the settings of whoever runs it.
     private readonly bool _autoResetOnNewGameStart = SettingsManager.Default.AutoResetOnNewGameStart;
     private readonly bool _practiceMode = SettingsManager.Default.PracticeMode;
+    private readonly string _lastSelectedGame = SettingsManager.Default.LastSelectedGame;
+    private readonly string _lastSelectedProfile = SettingsManager.Default.LastSelectedProfile;
 
     public void Dispose()
     {
-        if (SettingsManager.Default.AutoResetOnNewGameStart == _autoResetOnNewGameStart
-            && SettingsManager.Default.PracticeMode == _practiceMode)
+        var settings = SettingsManager.Default;
+        if (settings.AutoResetOnNewGameStart == _autoResetOnNewGameStart
+            && settings.PracticeMode == _practiceMode
+            && settings.LastSelectedGame == _lastSelectedGame
+            && settings.LastSelectedProfile == _lastSelectedProfile)
             return;
 
-        SettingsManager.Default.AutoResetOnNewGameStart = _autoResetOnNewGameStart;
-        SettingsManager.Default.PracticeMode = _practiceMode;
-        SettingsManager.Default.Save();
+        settings.AutoResetOnNewGameStart = _autoResetOnNewGameStart;
+        settings.PracticeMode = _practiceMode;
+        settings.LastSelectedGame = _lastSelectedGame;
+        settings.LastSelectedProfile = _lastSelectedProfile;
+        settings.Save();
     }
 
     public MainViewModelTests()
@@ -823,6 +830,22 @@ public class MainViewModelTests : IDisposable
 
         Assert.False(_sut.HasIgtOffset);
         Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    /// <summary>
+    /// The igt message is a partial that cannot carry the flag, and the new game path clears the offset
+    /// without reaching the reset that used to be the only other thing broadcasting the full state.
+    /// </summary>
+    [Fact]
+    public void RunStart_InPracticeMode_TellsTheOverlayTheIgtIsNoLongerRelative()
+    {
+        PinnedOffsetProfile();
+        _sut.IsPracticeMode = true;
+        _overlayServerService.ClearReceivedCalls();
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+
+        _overlayServerService.Received().BroadcastState(Arg.Is<OverlayState>(o => !o.IsIgtRelative));
     }
 
     [Fact]

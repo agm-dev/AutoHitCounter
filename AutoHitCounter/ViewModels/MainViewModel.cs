@@ -855,7 +855,6 @@ namespace AutoHitCounter.ViewModels
             SetIgtOffset(HasIgtOffset ? 0L : _rawIgtMs);
             UpdateInGameTime(_rawIgtMs);
             SaveRunState();
-            BroadcastOverlayState();
         }
 
         private void SetIgtOffset(long offsetMs)
@@ -866,8 +865,8 @@ namespace AutoHitCounter.ViewModels
             _profileService.SaveProfile(_activeProfile);
             OnPropertyChanged(nameof(HasIgtOffset));
             OnPropertyChanged(nameof(TimerLabel));
-            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
+            BroadcastOverlayState();
         }
 
         private ProfileEditorWindow _profileEditorWindow;
@@ -1292,7 +1291,6 @@ namespace AutoHitCounter.ViewModels
             OnPropertyChanged(nameof(TotalDiff));
             OnPropertyChanged(nameof(HasIgtOffset));
             OnPropertyChanged(nameof(TimerLabel));
-            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
             RefreshDistancePbIndicator();
             _wasRunComplete = IsRunComplete;
