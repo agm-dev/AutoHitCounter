@@ -150,6 +150,8 @@ public class EldenRingModule : IGameModule, IDisposable, IVersionedGameModule
 
     public void ApplySettings(bool onlyEnabled = false)
     {
+        if (_settingsService == null) return;
+
         var noLogo = SettingsManager.Default.ERNoLogo;
         if (noLogo || !onlyEnabled) _settingsService.ToggleNoLogo(noLogo);
 
