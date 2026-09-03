@@ -1006,6 +1006,28 @@
                                     VerticalAlignment="Bottom"
                                     Orientation="Horizontal"
                                     Margin="0,0,5,5">
+                            <Button Command="{Binding ToggleIgtOffsetCommand}"
+                                    Height="22"
+                                    Padding="6,0"
+                                    FontSize="11"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,8,0">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                        <Setter Property="Content" Value="Start at 0:00:00" />
+                                        <Setter Property="ToolTip"
+                                                Value="Count this run from the current in-game time, for a save picked up part way through. Kept on reset, cleared on a new game." />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasIgtOffset}" Value="True">
+                                                <Setter Property="Content" Value="Relative IGT ✕" />
+                                                <Setter Property="Foreground" Value="{DynamicResource IgtBrush}" />
+                                                <Setter Property="ToolTip"
+                                                        Value="This run is counting from a pinned in-game time. Click to go back to the raw IGT." />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                             <TextBlock Text="{Binding TimerLabel}"
                                        FontSize="12"
                                        Foreground="#888"

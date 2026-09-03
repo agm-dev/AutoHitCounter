@@ -26,6 +26,7 @@ namespace AutoHitCounter.ViewModels
         private readonly IOverlayServerService _overlayServerService;
         private readonly ICustomGameService _customGameService;
         private string _lastIgt;
+        private long _rawIgtMs;
         private readonly IRunStateService _runStateService;
         private readonly IGameSessionOrchestrator _orchestrator;
         private readonly ITwitchCategoryService _twitchCategoryService;
@@ -158,6 +159,8 @@ namespace AutoHitCounter.ViewModels
         public DelegateCommand MoveSplitDownCommand { get; set; }
 
         public DelegateCommand SetDistancePbCommand { get; set; }
+
+        public DelegateCommand ToggleIgtOffsetCommand { get; set; }
 
         public DelegateCommand RandomizeMultirunCommand { get; set; }
 
@@ -332,6 +335,19 @@ namespace AutoHitCounter.ViewModels
             get => _inGameTime;
             set => SetProperty(ref _inGameTime, value);
         }
+
+        /// <summary>Raw in-game time the current profile counts its run from. 0 when the run starts from scratch.</summary>
+        private long IgtOffsetMs => _activeProfile?.IgtOffsetMilliseconds ?? 0L;
+
+        public bool HasIgtOffset => IgtOffsetMs > 0;
+
+        /// <summary>
+        /// Pinning the IGT needs a profile to pin it on and a reading to pin it at, and means nothing on a
+        /// manual game, whose timer already starts at zero. Clearing one only needs the offset to be there.
+        /// </summary>
+        private bool CanToggleIgtOffset => _activeProfile != null
+                                           && _orchestrator.ActiveGame?.IsManual != true
+                                           && (_rawIgtMs > 0 || HasIgtOffset);
 
         private bool _isPracticeMode;
 
@@ -591,6 +607,7 @@ namespace AutoHitCounter.ViewModels
             ResetCommand = new DelegateCommand(ResetSplits);
             SetPbCommand = new DelegateCommand(SetPb);
             SetDistancePbCommand = new DelegateCommand(SetDistancePb, CanSetDistancePb);
+            ToggleIgtOffsetCommand = new DelegateCommand(ToggleIgtOffset, () => CanToggleIgtOffset);
 
             ClearAllNotesCommand = new DelegateCommand(() =>
             {
@@ -760,6 +777,7 @@ namespace AutoHitCounter.ViewModels
             SettingsManager.Default.Save();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
+            ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
         }
 
         private void AutoAdvanceSplit()
@@ -779,6 +797,10 @@ namespace AutoHitCounter.ViewModels
             // Starting over on a game that took hits restarts the multirun from that game.
             _multirunService.OnNewGameStarted(_selectedGame?.GameName);
 
+            // A brand new game counts from 0:00:00 by itself, so an offset pinned for a run picked up part
+            // way through a save is meaningless from here on — whether or not the run itself gets reset.
+            SetIgtOffset(0L);
+
             if (!SettingsManager.Default.AutoResetOnNewGameStart) return;
             if (!HasRunProgress()) return;
 
@@ -795,7 +817,12 @@ namespace AutoHitCounter.ViewModels
 
         private void UpdateInGameTime(long igt)
         {
-            InGameTime = TimeSpan.FromMilliseconds(igt);
+            var hadReading = _rawIgtMs > 0;
+            _rawIgtMs = igt;
+            if (hadReading != igt > 0)
+                ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
+
+            InGameTime = TimeSpan.FromMilliseconds(Math.Max(0L, igt - IgtOffsetMs));
             var formatted = $"{(int)InGameTime.TotalHours}:{InGameTime.Minutes:D2}:{InGameTime.Seconds:D2}";
             if (formatted != _lastIgt)
             {
@@ -803,6 +830,29 @@ namespace AutoHitCounter.ViewModels
                 InGameTimeFormatted = formatted;
                 _overlayServerService.BroadcastIgt(formatted);
             }
+        }
+
+        /// <summary>
+        /// Pins the run's IGT to the reading it is at, so a save picked up hours in counts from 0:00:00, or
+        /// gives the raw in-game time back when one is already pinned.
+        /// </summary>
+        private void ToggleIgtOffset()
+        {
+            if (!CanToggleIgtOffset) return;
+
+            SetIgtOffset(HasIgtOffset ? 0L : _rawIgtMs);
+            UpdateInGameTime(_rawIgtMs);
+            SaveRunState();
+        }
+
+        private void SetIgtOffset(long offsetMs)
+        {
+            if (_activeProfile == null || _activeProfile.IgtOffsetMilliseconds == offsetMs) return;
+
+            _activeProfile.IgtOffsetMilliseconds = offsetMs;
+            _profileService.SaveProfile(_activeProfile);
+            OnPropertyChanged(nameof(HasIgtOffset));
+            ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
         }
 
         private ProfileEditorWindow _profileEditorWindow;
@@ -1135,6 +1185,7 @@ namespace AutoHitCounter.ViewModels
             _orchestrator.Stop();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
+            ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
 
             Games.Remove(_selectedGame);
             SelectedGame = Games.FirstOrDefault();
@@ -1204,6 +1255,11 @@ namespace AutoHitCounter.ViewModels
         {
             _runStateService.CancelPendingSave();
             IsRunComplete = false;
+
+            // The reading belongs to whatever was being tracked before, so the offset cannot be pinned
+            // against it: wait for the next tick of the game this profile is for.
+            _rawIgtMs = 0L;
+
             UpdateSplits();
             if (profile != null && _runStateService.TryGet(_selectedGame?.GameName, profile.Name, out var snapshot))
                 RestoreSnapshot(snapshot);
@@ -1218,6 +1274,8 @@ namespace AutoHitCounter.ViewModels
             OnPropertyChanged(nameof(TotalHits));
             OnPropertyChanged(nameof(TotalPb));
             OnPropertyChanged(nameof(TotalDiff));
+            OnPropertyChanged(nameof(HasIgtOffset));
+            ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
             RefreshDistancePbIndicator();
             _wasRunComplete = IsRunComplete;
             BroadcastOverlayState();
@@ -1269,6 +1327,9 @@ namespace AutoHitCounter.ViewModels
 
             _orchestrator.ManualReset();
 
+            // A pinned IGT offset deliberately survives a reset: the player quits, reloads the save the
+            // offset was pinned at and starts over from that same spot, so the next reading lands back on
+            // 0:00:00 on its own. Only a new game clears it, over in HandleRunStart.
             InGameTime = TimeSpan.Zero;
             InGameTimeFormatted = "0:00:00";
 
