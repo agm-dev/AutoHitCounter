@@ -75,7 +75,8 @@ namespace AutoHitCounter.ViewModels
                 SaveRunState();
                 BroadcastOverlayState();
 
-                var payload = new HitPayload(_orchestrator.ActiveGame, ActiveProfile, CurrentSplit, TotalHits, TotalPb, InGameTime);
+                var payload = new HitPayload(_orchestrator.ActiveGame, ActiveProfile, CurrentSplit, TotalHits, TotalPb,
+                    InGameTime);
                 await externalIntegrationService.SendHitAsync(payload);
             };
             _orchestrator.RunStartDetected += HandleRunStart;
@@ -94,12 +95,12 @@ namespace AutoHitCounter.ViewModels
             _multirunService.Changed += OnMultirunChanged;
 
             RegisterHotkeys();
-            
+
             _isUnlocked = SettingsManager.Default.IsUnlocked;
 
             ThemeService.ThemeChanged += OnThemeChanged;
             InitialiseCommands();
-            
+
             foreach (var game in _gameModuleFactory.GetRegisteredGames())
                 Games.Add(game);
 
@@ -187,7 +188,7 @@ namespace AutoHitCounter.ViewModels
             get => _isAttached;
             set => SetProperty(ref _isAttached, value);
         }
-        
+
         private AttachmentStatus _attachmentStatus;
 
         public AttachmentStatus AttachmentStatus
@@ -885,11 +886,24 @@ namespace AutoHitCounter.ViewModels
 
         internal void ApplyProfileEditorClosed()
         {
+            var previousActiveProfileName = _activeProfile?.Name;
+
             if (_activeProfile != null)
                 _runStateService.Invalidate(_selectedGame.GameName, _activeProfile.Name);
 
-            var validProfileNames = _profileService.GetProfiles(_selectedGame.GameName).Select(p => p.Name);
-            _runStateService.InvalidateStale(_selectedGame.GameName, validProfileNames);
+            var updatedProfiles = _profileService.GetProfiles(_selectedGame.GameName);
+
+            Profiles.Clear();
+            foreach (var p in updatedProfiles)
+                Profiles.Add(p);
+
+            var stillExists = previousActiveProfileName != null
+                ? Profiles.FirstOrDefault(p => p.Name == previousActiveProfileName)
+                : null;
+
+            ActiveProfile = stillExists ?? Profiles.FirstOrDefault();
+
+            _runStateService.InvalidateStale(_selectedGame.GameName, updatedProfiles.Select(p => p.Name));
         }
 
         private void UpdateSplits()
