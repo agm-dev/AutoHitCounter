@@ -12,6 +12,12 @@ public class OverlayState
     public int TotalDiff { get; set; }
     public int TotalPb { get; set; }
     public string InGameTime { get; set; }
+
+    /// <summary>
+    /// The in-game time is counted from a point the player pinned rather than from the start of the save,
+    /// so it will not match the clock in the game. Overlays that show the IGT should say so.
+    /// </summary>
+    public bool IsIgtRelative { get; set; }
     public bool IsRunComplete { get; set; }
     public int AttemptCount { get; set; }
     public int DistancePb { get; set; } = -1;

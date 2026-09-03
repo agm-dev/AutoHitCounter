@@ -1007,6 +1007,7 @@
                                     Orientation="Horizontal"
                                     Margin="0,0,5,5">
                             <Button Command="{Binding ToggleIgtOffsetCommand}"
+                                    Visibility="{Binding IsRelativeIgtSupported, Converter={StaticResource BoolToVisConverter}}"
                                     Height="22"
                                     Padding="6,0"
                                     FontSize="11"

@@ -77,7 +77,7 @@ namespace AutoHitCounter.ViewModels
                 BroadcastOverlayState();
 
                 var payload = new HitPayload(_orchestrator.ActiveGame, ActiveProfile, CurrentSplit, TotalHits, TotalPb,
-                    InGameTime);
+                    InGameTime, IgtOffsetMs);
                 await externalIntegrationService.SendHitAsync(payload);
             };
             _orchestrator.RunStartDetected += HandleRunStart;
@@ -261,7 +261,9 @@ namespace AutoHitCounter.ViewModels
             ? $"Track hits for the currently selected game.\nCurrently Tracking: {_orchestrator.ActiveGame.GameName}"
             : "Not tracking";
 
-        public string TimerLabel => _orchestrator.ActiveGame?.IsManual == true ? "RTA" : "IGT";
+        public string TimerLabel => _orchestrator.ActiveGame?.IsManual == true
+            ? "RTA"
+            : HasIgtOffset ? "IGT rel." : "IGT";
 
         public ObservableCollection<SplitViewModel> Splits { get; } = new();
 
@@ -341,13 +343,18 @@ namespace AutoHitCounter.ViewModels
 
         public bool HasIgtOffset => IgtOffsetMs > 0;
 
+        /// <summary>A manual game times itself from zero, so it has nothing to count from.</summary>
+        public bool IsRelativeIgtSupported => _orchestrator.ActiveGame?.IsManual != true;
+
         /// <summary>
-        /// Pinning the IGT needs a profile to pin it on and a reading to pin it at, and means nothing on a
-        /// manual game, whose timer already starts at zero. Clearing one only needs the offset to be there.
+        /// Pinning the IGT needs a profile to pin it on and a live reading of that profile's own game to pin
+        /// it at — the timer keeps showing whatever game is being tracked, and pinning another game's reading
+        /// would write it to this profile. Clearing one only needs the offset to be there.
         /// </summary>
         private bool CanToggleIgtOffset => _activeProfile != null
-                                           && _orchestrator.ActiveGame?.IsManual != true
-                                           && (_rawIgtMs > 0 || HasIgtOffset);
+                                           && IsRelativeIgtSupported
+                                           && _selectedGame == _orchestrator.ActiveGame
+                                           && (HasIgtOffset || (_rawIgtMs > 0 && _orchestrator.IsAttached));
 
         private bool _isPracticeMode;
 
@@ -751,6 +758,7 @@ namespace AutoHitCounter.ViewModels
             AttachedText = _orchestrator.AttachedText;
             AttachmentStatus = _orchestrator.AttachmentStatus;
             OnPropertyChanged(nameof(TrackingText));
+            ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
         }
 
         /// <summary>Tracking started by the user, which is what moves the game to the current spot of a multirun.</summary>
@@ -777,6 +785,7 @@ namespace AutoHitCounter.ViewModels
             SettingsManager.Default.Save();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
+            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
         }
 
@@ -792,14 +801,17 @@ namespace AutoHitCounter.ViewModels
         {
             if (_orchestrator.ActiveGame?.IsManual == true) return;
             if (_selectedGame != _orchestrator.ActiveGame) return;
+
+            // A brand new game counts from 0:00:00 by itself, so an offset pinned for a run picked up part
+            // way through a save is meaningless from here on — whether or not the run itself gets reset, and
+            // practice included, or the offset outlives the practice session and pins the timer to 0:00:00
+            // for as long as the abandoned save was into its own run.
+            SetIgtOffset(0L);
+
             if (IsPracticeMode) return;
 
             // Starting over on a game that took hits restarts the multirun from that game.
             _multirunService.OnNewGameStarted(_selectedGame?.GameName);
-
-            // A brand new game counts from 0:00:00 by itself, so an offset pinned for a run picked up part
-            // way through a save is meaningless from here on — whether or not the run itself gets reset.
-            SetIgtOffset(0L);
 
             if (!SettingsManager.Default.AutoResetOnNewGameStart) return;
             if (!HasRunProgress()) return;
@@ -819,7 +831,7 @@ namespace AutoHitCounter.ViewModels
         {
             var hadReading = _rawIgtMs > 0;
             _rawIgtMs = igt;
-            if (hadReading != igt > 0)
+            if (hadReading != (igt > 0))
                 ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
 
             InGameTime = TimeSpan.FromMilliseconds(Math.Max(0L, igt - IgtOffsetMs));
@@ -843,6 +855,7 @@ namespace AutoHitCounter.ViewModels
             SetIgtOffset(HasIgtOffset ? 0L : _rawIgtMs);
             UpdateInGameTime(_rawIgtMs);
             SaveRunState();
+            BroadcastOverlayState();
         }
 
         private void SetIgtOffset(long offsetMs)
@@ -852,6 +865,8 @@ namespace AutoHitCounter.ViewModels
             _activeProfile.IgtOffsetMilliseconds = offsetMs;
             _profileService.SaveProfile(_activeProfile);
             OnPropertyChanged(nameof(HasIgtOffset));
+            OnPropertyChanged(nameof(TimerLabel));
+            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
         }
 
@@ -1185,6 +1200,7 @@ namespace AutoHitCounter.ViewModels
             _orchestrator.Stop();
             OnPropertyChanged(nameof(TrackingText));
             OnPropertyChanged(nameof(TimerLabel));
+            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
 
             Games.Remove(_selectedGame);
@@ -1275,6 +1291,8 @@ namespace AutoHitCounter.ViewModels
             OnPropertyChanged(nameof(TotalPb));
             OnPropertyChanged(nameof(TotalDiff));
             OnPropertyChanged(nameof(HasIgtOffset));
+            OnPropertyChanged(nameof(TimerLabel));
+            OnPropertyChanged(nameof(IsRelativeIgtSupported));
             ToggleIgtOffsetCommand?.RaiseCanExecuteChanged();
             RefreshDistancePbIndicator();
             _wasRunComplete = IsRunComplete;
