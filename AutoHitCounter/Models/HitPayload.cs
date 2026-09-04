@@ -20,6 +20,12 @@ namespace AutoHitCounter.Models
         public int SplitPB { get; set; }
         public int TotalPB { get; set; }
         public double IgtMilliseconds { get; set; }
+
+        /// <summary>
+        /// In-game time the run was pinned to count from, 0 when it started from scratch. Non-zero means
+        /// IgtMilliseconds is relative to that point, and the raw in-game time is the two added together.
+        /// </summary>
+        public double IgtOffsetMilliseconds { get; set; }
         public string IgtFormatted
         {
             get
@@ -29,7 +35,7 @@ namespace AutoHitCounter.Models
             }
         }
 
-        public HitPayload(Game game, Profile profile, SplitViewModel split, int _totalHits, int _totalPb, TimeSpan _inGameTime)
+        public HitPayload(Game game, Profile profile, SplitViewModel split, int _totalHits, int _totalPb, TimeSpan _inGameTime, long _igtOffsetMs = 0)
         {
             UserId = SettingsManager.Default.ExternalIntegrationUserIdentifier;
             GameName = game.GameName;
@@ -42,6 +48,7 @@ namespace AutoHitCounter.Models
             Timestamp = DateTime.UtcNow;
             AttemptCount = profile?.AttemptCount ?? 0;
             IgtMilliseconds = _inGameTime.TotalMilliseconds;
+            IgtOffsetMilliseconds = _igtOffsetMs;
         }
 
 

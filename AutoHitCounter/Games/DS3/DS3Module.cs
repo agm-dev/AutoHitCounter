@@ -151,6 +151,8 @@ public class DS3Module : IGameModule, IDisposable, IVersionedGameModule
 
     public void ApplySettings(bool onlyEnabled = false)
     {
+        if (_settingsService == null) return;
+
         var noLogo = SettingsManager.Default.DS3NoLogo;
         if (noLogo || !onlyEnabled) _settingsService.ToggleNoLogo(noLogo);
 

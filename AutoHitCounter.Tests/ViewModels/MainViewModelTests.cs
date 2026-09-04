@@ -5,13 +5,14 @@ using System.Collections.Generic;
 using AutoHitCounter.Enums;
 using AutoHitCounter.Interfaces;
 using AutoHitCounter.Models;
+using AutoHitCounter.Utilities;
 using AutoHitCounter.ViewModels;
 using NSubstitute;
 using Xunit;
 
 namespace AutoHitCounter.Tests.ViewModels;
 
-public class MainViewModelTests
+public class MainViewModelTests : IDisposable
 {
     private readonly IHotkeyManager _hotkeyManager = Substitute.For<IHotkeyManager>();
     private readonly IGameModuleFactory _gameModuleFactory = Substitute.For<IGameModuleFactory>();
@@ -28,11 +29,35 @@ public class MainViewModelTests
 
     private readonly MainViewModel _sut;
 
+    // Selecting a game or a profile has the view model write the settings out, so the whole class has to
+    // put them back the way it found them or the suite rewrites the settings of whoever runs it.
+    private readonly bool _autoResetOnNewGameStart = SettingsManager.Default.AutoResetOnNewGameStart;
+    private readonly bool _practiceMode = SettingsManager.Default.PracticeMode;
+    private readonly string _lastSelectedGame = SettingsManager.Default.LastSelectedGame;
+    private readonly string _lastSelectedProfile = SettingsManager.Default.LastSelectedProfile;
+
+    public void Dispose()
+    {
+        var settings = SettingsManager.Default;
+        if (settings.AutoResetOnNewGameStart == _autoResetOnNewGameStart
+            && settings.PracticeMode == _practiceMode
+            && settings.LastSelectedGame == _lastSelectedGame
+            && settings.LastSelectedProfile == _lastSelectedProfile)
+            return;
+
+        settings.AutoResetOnNewGameStart = _autoResetOnNewGameStart;
+        settings.PracticeMode = _practiceMode;
+        settings.LastSelectedGame = _lastSelectedGame;
+        settings.LastSelectedProfile = _lastSelectedProfile;
+        settings.Save();
+    }
+
     public MainViewModelTests()
     {
         _gameModuleFactory.GetRegisteredGames().Returns(new List<Game>());
         _customGameService.Load().Returns(new List<Game>());
         _profileService.GetProfiles(Arg.Any<string>()).Returns(new List<Profile>());
+        _orchestrator.IsAttached.Returns(true);
 
         _sut = new MainViewModel(
             _hotkeyManager, _gameModuleFactory, _profileService, _stateService,
@@ -613,6 +638,347 @@ public class MainViewModelTests
         _splitNav.StateChanged += Raise.Event<Action>();
 
         _multirunService.DidNotReceive().CompleteGame(Arg.Any<string>(), Arg.Any<bool>());
+    }
+
+    #endregion
+
+    #region Relative IGT
+
+    private Profile PinnedOffsetProfile(long pinnedAtMs = 90000L)
+    {
+        var profile = SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(pinnedAtMs);
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+        return profile;
+    }
+
+    [Fact]
+    public void InGameTime_WithNoOffset_ReflectsRawIgt()
+    {
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(90000), _sut.InGameTime);
+        Assert.Equal("0:01:30", _sut.InGameTimeFormatted);
+        Assert.False(_sut.HasIgtOffset);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_PinsTheRunAtTheCurrentReading()
+    {
+        PinnedOffsetProfile();
+
+        Assert.True(_sut.HasIgtOffset);
+        Assert.Equal(TimeSpan.Zero, _sut.InGameTime);
+        Assert.Equal("0:00:00", _sut.InGameTimeFormatted);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_StoresTheOffsetOnTheProfile()
+    {
+        var profile = PinnedOffsetProfile();
+
+        Assert.Equal(90000L, profile.IgtOffsetMilliseconds);
+        _profileService.Received().SaveProfile(profile);
+    }
+
+    [Fact]
+    public void InGameTime_WithAnOffsetPinned_CountsFromZero()
+    {
+        PinnedOffsetProfile();
+
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(30000), _sut.InGameTime);
+        Assert.Equal("0:00:30", _sut.InGameTimeFormatted);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_Twice_GivesTheRawIgtBack()
+    {
+        var profile = PinnedOffsetProfile();
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+        Assert.Equal(TimeSpan.FromMilliseconds(120000), _sut.InGameTime);
+        Assert.Equal("0:02:00", _sut.InGameTimeFormatted);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_WithoutAReadingFromTheGame_DoesNothing()
+    {
+        var profile = SetupProfileWithSplits(("Boss", SplitType.Child));
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_WithoutAProfile_DoesNothing()
+    {
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+    }
+
+    [Fact]
+    public void IsRelativeIgtSupported_OnAManualGame_IsFalse()
+    {
+        _orchestrator.ActiveGame.Returns(new Game { GameName = "Custom", IsManual = true });
+
+        Assert.False(_sut.IsRelativeIgtSupported);
+    }
+
+    [Fact]
+    public void IsRelativeIgtSupported_OnAMemoryGame_IsTrue()
+    {
+        _orchestrator.ActiveGame.Returns(new Game { GameName = "Elden Ring", IsManual = false });
+
+        Assert.True(_sut.IsRelativeIgtSupported);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_WhileTrackingAnotherGame_DoesNothing()
+    {
+        var profile = SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.ActiveGame.Returns(new Game { GameName = "Other" });
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_WhileNotAttached_DoesNothing()
+    {
+        var profile = SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _orchestrator.IsAttached.Returns(false);
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_SavesTheRunState()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _runStateService.ClearReceivedCalls();
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        _runStateService.Received().SaveRunState(
+            Arg.Any<Profile>(), Arg.Any<IList<SplitViewModel>>(), Arg.Any<SplitViewModel>(),
+            Arg.Any<bool>(), TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void ToggleIgtOffset_TellsTheOverlayTheIgtIsRelative()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+        _overlayServerService.ClearReceivedCalls();
+
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        _overlayServerService.Received().BroadcastState(Arg.Is<OverlayState>(o => o.IsIgtRelative));
+    }
+
+    [Fact]
+    public void TimerLabel_WithAnOffsetPinned_SaysTheIgtIsRelative()
+    {
+        Assert.Equal("IGT", _sut.TimerLabel);
+
+        PinnedOffsetProfile();
+
+        Assert.Equal("IGT rel.", _sut.TimerLabel);
+    }
+
+    /// <summary>
+    /// Loading a save from before the point the offset was pinned at, or another character, reads below the
+    /// offset. The timer sits at 0:00:00 rather than running backwards.
+    /// </summary>
+    [Fact]
+    public void InGameTime_WithAReadingBelowTheOffset_StaysAtZero()
+    {
+        PinnedOffsetProfile();
+
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(20000L);
+
+        Assert.Equal(TimeSpan.Zero, _sut.InGameTime);
+        Assert.Equal("0:00:00", _sut.InGameTimeFormatted);
+    }
+
+    [Fact]
+    public void RunStart_InPracticeMode_StillClearsTheIgtOffset()
+    {
+        var profile = PinnedOffsetProfile();
+        _sut.IsPracticeMode = true;
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    /// <summary>
+    /// The igt message is a partial that cannot carry the flag, and the new game path clears the offset
+    /// without reaching the reset that used to be the only other thing broadcasting the full state.
+    /// </summary>
+    [Fact]
+    public void RunStart_InPracticeMode_TellsTheOverlayTheIgtIsNoLongerRelative()
+    {
+        PinnedOffsetProfile();
+        _sut.IsPracticeMode = true;
+        _overlayServerService.ClearReceivedCalls();
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+
+        _overlayServerService.Received().BroadcastState(Arg.Is<OverlayState>(o => !o.IsIgtRelative));
+    }
+
+    [Fact]
+    public void SwitchingGame_LeavesTheOffsetOnTheProfileItWasPinnedFor()
+    {
+        var pinned = PinnedOffsetProfile();
+
+        _sut.SelectedGame = new Game { GameName = "Other Game" };
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal("IGT", _sut.TimerLabel);
+        Assert.Equal(90000L, pinned.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void Reset_KeepsTheIgtOffset()
+    {
+        var profile = PinnedOffsetProfile();
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        _sut.ResetCommand.Execute(null);
+
+        Assert.True(_sut.HasIgtOffset);
+        Assert.Equal(90000L, profile.IgtOffsetMilliseconds);
+        Assert.Equal(TimeSpan.Zero, _sut.InGameTime);
+    }
+
+    /// <summary>
+    /// The cycle the offset exists for: the player quits, reloads the save it was pinned at, resets, and
+    /// walking back in has the run counting from 0:00:00 again.
+    /// </summary>
+    [Fact]
+    public void Reset_ThenReloadingTheSaveTheOffsetWasPinnedAt_CountsFromZeroAgain()
+    {
+        PinnedOffsetProfile();
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        _sut.ResetCommand.Execute(null);
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+
+        Assert.Equal(TimeSpan.Zero, _sut.InGameTime);
+        Assert.Equal("0:00:00", _sut.InGameTimeFormatted);
+    }
+
+    [Fact]
+    public void RunStart_ClearsTheIgtOffset()
+    {
+        SettingsManager.Default.AutoResetOnNewGameStart = false;
+        var profile = PinnedOffsetProfile();
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void RunStart_WithAutoReset_ClearsTheIgtOffset()
+    {
+        SettingsManager.Default.AutoResetOnNewGameStart = true;
+        var profile = PinnedOffsetProfile();
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, profile.IgtOffsetMilliseconds);
+    }
+
+    /// <summary>
+    /// A new game counts from zero, and a stale offset would clamp the timer at 0:00:00 for as long as the
+    /// old save was into its own run.
+    /// </summary>
+    [Fact]
+    public void RunStart_ThenTheNewGameIgt_AdvancesInsteadOfStayingAtZero()
+    {
+        SettingsManager.Default.AutoResetOnNewGameStart = false;
+        PinnedOffsetProfile();
+
+        _orchestrator.RunStartDetected += Raise.Event<Action>();
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(5000L);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(5000), _sut.InGameTime);
+    }
+
+    [Fact]
+    public void SwitchingProfile_LeavesTheOffsetOnTheProfileItWasPinnedFor()
+    {
+        var pinned = PinnedOffsetProfile();
+
+        _sut.ActiveProfile = new Profile
+        {
+            Name = "Other",
+            Splits = new List<SplitEntry> { new SplitEntry { Name = "Boss", Type = SplitType.Child } }
+        };
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(90000L, pinned.IgtOffsetMilliseconds);
+    }
+
+    [Fact]
+    public void SwitchingBackToAProfileWithAnOffset_AppliesItAgain()
+    {
+        var pinned = PinnedOffsetProfile();
+        _sut.ActiveProfile = new Profile
+        {
+            Name = "Other",
+            Splits = new List<SplitEntry> { new SplitEntry { Name = "Boss", Type = SplitType.Child } }
+        };
+
+        _sut.ActiveProfile = pinned;
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(120000L);
+
+        Assert.True(_sut.HasIgtOffset);
+        Assert.Equal(TimeSpan.FromMilliseconds(30000), _sut.InGameTime);
+    }
+
+    [Fact]
+    public void SwitchingProfile_CannotPinAnOffsetUntilTheNextReading()
+    {
+        SetupProfileWithSplits(("Boss", SplitType.Child));
+        _orchestrator.TimeChangedMs += Raise.Event<Action<long>>(90000L);
+
+        var other = new Profile
+        {
+            Name = "Other",
+            Splits = new List<SplitEntry> { new SplitEntry { Name = "Boss", Type = SplitType.Child } }
+        };
+        _sut.ActiveProfile = other;
+        _sut.ToggleIgtOffsetCommand.Execute(null);
+
+        Assert.False(_sut.HasIgtOffset);
+        Assert.Equal(0L, other.IgtOffsetMilliseconds);
     }
 
     #endregion

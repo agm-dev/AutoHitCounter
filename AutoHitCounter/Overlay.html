@@ -190,6 +190,13 @@
             font-size: 16px;
             color: #c47fd4;
         }
+
+        /* Marks a run counted from a point the runner pinned rather than from the start of the save */
+        .igt-rel {
+            font-size: 0.65em;
+            opacity: 0.75;
+            margin-left: 1px;
+        }
         
 
         /* Run complete banner */
@@ -854,8 +861,13 @@
                     : config.attemptsZeroColor;
             }
 
+            // The igt message is a partial that only replaces the number, so the marker sits beside
+            // #igt rather than inside it, and rides along with the full state that carries the flag.
+            const igtRelHtml = state.isIgtRelative
+                ? `<sup class="igt-rel" title="Relative in-game time: counted from a point the runner pinned, not from the start of the save.">*</sup>`
+                : '';
             const igtHtml = config.showIgt
-                ? `<span class="igt" id="igt">${formatIgt(state.inGameTime ?? '')}</span>`
+                ? `<span class="igt"><span id="igt">${formatIgt(state.inGameTime ?? '')}</span>${igtRelHtml}</span>`
                 : `<span id="igt"></span>`;
             const diffClass = state.totalDiff > 0 ? 'diff-pos' : state.totalDiff < 0 ? 'diff-neg' : 'diff-zero';
             const diffText = state.totalDiff > 0 ? `+${state.totalDiff}` : `${state.totalDiff}`;
