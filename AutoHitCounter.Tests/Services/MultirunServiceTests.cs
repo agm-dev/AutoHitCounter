@@ -17,10 +17,18 @@ public class MultirunServiceTests
     private readonly FakeMultirunStore _store = new();
     private readonly IOverlayServerService _overlayServerService = Substitute.For<IOverlayServerService>();
 
-    private MultirunService CreateSut(bool enabled = true, params string[] games)
+    private MultirunService CreateSut(bool enabled = true, params string[] games) =>
+        CreateSut(enabled, keepProgressWithFailedGames: false, games);
+
+    /// <summary>A multirun of several games being practised, where a game that took hits does not start it over.</summary>
+    private MultirunService CreatePracticeSut(params string[] games) =>
+        CreateSut(enabled: true, keepProgressWithFailedGames: true, games);
+
+    private MultirunService CreateSut(bool enabled, bool keepProgressWithFailedGames, params string[] games)
     {
         _store.Config = MultirunConfig.CreateDefault();
         _store.Config.Enabled = enabled;
+        _store.Config.KeepProgressWithFailedGames = keepProgressWithFailedGames;
         _store.Config.Entries = games.Select(g => new MultirunEntry
         {
             Id = Guid.NewGuid().ToString(),
@@ -33,10 +41,12 @@ public class MultirunServiceTests
     }
 
     /// <summary>A multirun made of several cycles (NG, NG+1...) of a single game.</summary>
-    private MultirunService CreateCyclesSut(string game, int count, bool enabled = true)
+    private MultirunService CreateCyclesSut(string game, int count, bool enabled = true,
+        bool keepProgressWithFailedGames = false)
     {
         _store.Config = MultirunConfig.CreateDefault();
         _store.Config.Enabled = enabled;
+        _store.Config.KeepProgressWithFailedGames = keepProgressWithFailedGames;
         _store.Config.Mode = MultirunMode.Cycles;
         _store.Config.CycleGameName = game;
         _store.Config.CycleCount = count;
@@ -597,6 +607,145 @@ public class MultirunServiceTests
         var sut = CreateSut();
 
         Assert.Equal(expected, sut.GetDefaultCycleAbbreviation(cycleIndex));
+    }
+
+    #endregion
+
+    #region Practising a multirun
+
+    [Fact]
+    public void OnGameTracked_AfterAHit_WhenProgressIsKept_CarriesOnWithoutRestarting()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3");
+        sut.SyncHits("DS1", hasHits: true);
+
+        sut.OnGameTracked("DS2");
+
+        Assert.Equal(new[] { "DS1", "DS2", "DS3" }, Order(sut));
+        Assert.Equal(MultirunStatus.Hit, StatusOf(sut, "DS1"));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_AbandoningAGameWithHits_WhenProgressIsKept_LeavesItBehindInRed()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3", "ER");
+        sut.CompleteGame("DS1", hasHits: false);
+        sut.SyncHits("DS2", hasHits: true);
+
+        sut.OnGameTracked("ER");
+
+        Assert.Equal(new[] { "DS1", "DS2", "ER", "DS3" }, Order(sut));
+        Assert.Equal(MultirunStatus.Completed, StatusOf(sut, "DS1"));
+        Assert.Equal(MultirunStatus.Hit, StatusOf(sut, "DS2"));
+        Assert.Equal(2, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_AfterCompletingAGameWithHits_WhenProgressIsKept_MovesItToTheCurrentSpot()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: true);
+
+        sut.OnGameTracked("DS3");
+
+        Assert.Equal(new[] { "DS1", "DS3", "DS2" }, Order(sut));
+        Assert.Equal(MultirunStatus.Hit, StatusOf(sut, "DS1"));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnNewGameStarted_AfterAHit_WhenProgressIsKept_LeavesTheMultirunAsItIs()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: false);
+        sut.SyncHits("DS2", hasHits: true);
+
+        sut.OnNewGameStarted("DS2");
+
+        Assert.Equal(new[] { "DS1", "DS2", "DS3" }, Order(sut));
+        Assert.Equal(MultirunStatus.Completed, StatusOf(sut, "DS1"));
+        Assert.Equal(MultirunStatus.Hit, StatusOf(sut, "DS2"));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnAMultirunOfSeveralGames_WhenProgressIsKept_StillStartsItOver()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: true);
+
+        sut.OnRunReset("DS2");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_OnACyclesMultirunAfterAHit_WhenProgressIsKept_MovesOnToTheNextCycle()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3, keepProgressWithFailedGames: true);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+
+        sut.OnRunReset("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Hit, StatusAt(sut, 0));
+        Assert.Equal(MultirunStatus.Pending, StatusAt(sut, 1));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnNewGameStarted_OnACyclesMultirunAfterAHit_WhenProgressIsKept_MovesOnToTheNextCycle()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3, keepProgressWithFailedGames: true);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+
+        sut.OnNewGameStarted("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Hit, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnGameTracked_OnACyclesMultirunAfterAHit_WhenProgressIsKept_KeepsTheCycleItIsOn()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 3, keepProgressWithFailedGames: true);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+
+        sut.OnGameTracked("Elden Ring");
+
+        Assert.Equal(MultirunStatus.Hit, StatusAt(sut, 0));
+        Assert.Equal(1, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void OnRunReset_AfterCompletingTheLastCycleWithHits_WhenProgressIsKept_StillStartsTheMultirunOver()
+    {
+        var sut = CreateCyclesSut("Elden Ring", 2, keepProgressWithFailedGames: true);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+        sut.CompleteGame("Elden Ring", hasHits: true);
+        Assert.Equal(-1, sut.Config.CurrentIndex);
+
+        sut.OnRunReset("Elden Ring");
+
+        Assert.All(sut.Entries, e => Assert.Equal(MultirunStatus.Pending, e.Status));
+        Assert.Equal(0, sut.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void Broadcast_WhileBeingPractised_SendsTheGamesLeftBehindGreenAndRed()
+    {
+        var sut = CreatePracticeSut("DS1", "DS2", "DS3");
+        sut.CompleteGame("DS1", hasHits: false);
+        sut.CompleteGame("DS2", hasHits: true);
+
+        MultirunState state = null;
+        _overlayServerService.BroadcastMultirun(Arg.Do<MultirunState>(s => state = s));
+        sut.Broadcast();
+
+        Assert.NotNull(state);
+        Assert.Equal(new[] { "completed", "hit", "pending" }, state.Entries.Select(e => e.Status));
+        Assert.Equal(new[] { false, false, true }, state.Entries.Select(e => e.IsCurrent));
     }
 
     #endregion

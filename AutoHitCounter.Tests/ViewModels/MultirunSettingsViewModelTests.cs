@@ -141,6 +141,44 @@ public class MultirunSettingsViewModelTests
         Assert.Equal(1, service.Config.CurrentIndex);
     }
 
+    [Fact]
+    public void KeepProgressWithFailedGames_Ticked_ReachesTheMultirun()
+    {
+        var service = CreateCyclesService("Elden Ring", 3);
+        var sut = new MultirunSettingsViewModel(service, _gameModuleFactory, _customGameService);
+        service.CompleteGame("Elden Ring", hasHits: false);
+
+        sut.KeepProgressWithFailedGames = true;
+
+        Assert.True(service.Config.KeepProgressWithFailedGames);
+        Assert.Equal(3, service.Entries.Count);
+        Assert.Equal(MultirunStatus.Completed, service.Entries[0].Status);
+        Assert.Equal(1, service.Config.CurrentIndex);
+    }
+
+    [Fact]
+    public void Refresh_WithFailedGamesKept_LoadsTheOptionWithoutWritingItBack()
+    {
+        var service = CreateCyclesService("Elden Ring", 3);
+        service.UpdateConfig(WithFailedGamesKept(service));
+        var sut = new MultirunSettingsViewModel(service, _gameModuleFactory, _customGameService);
+        service.CompleteGame("Elden Ring", hasHits: true);
+
+        sut.Refresh();
+
+        Assert.True(sut.KeepProgressWithFailedGames);
+        Assert.True(service.Config.KeepProgressWithFailedGames);
+        Assert.Equal(MultirunStatus.Hit, service.Entries[0].Status);
+        Assert.Equal(1, service.Config.CurrentIndex);
+    }
+
+    private static MultirunConfig WithFailedGamesKept(MultirunService service)
+    {
+        var config = service.Config.Clone();
+        config.KeepProgressWithFailedGames = true;
+        return config;
+    }
+
     private class FakeMultirunStore : IMultirunStore
     {
         public MultirunConfig Config { get; set; } = MultirunConfig.CreateDefault();

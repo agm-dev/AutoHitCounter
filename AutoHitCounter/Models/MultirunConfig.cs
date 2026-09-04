@@ -20,6 +20,12 @@ public class MultirunConfig
     /// <summary>Whether the multirun is a list of different games or several cycles of a single one.</summary>
     public MultirunMode Mode { get; set; } = MultirunMode.Games;
 
+    /// <summary>
+    /// Whether a game that took hits is kept as part of the multirun instead of starting it over. For
+    /// practising a multirun without caring about the games already lost along the way.
+    /// </summary>
+    public bool KeepProgressWithFailedGames { get; set; }
+
     /// <summary>The games of the multirun in overlay order, with their progress. Built from the setup of the active mode.</summary>
     public List<MultirunEntry> Entries { get; set; } = new List<MultirunEntry>();
 
@@ -53,6 +59,7 @@ public class MultirunConfig
     {
         Enabled = false,
         Mode = MultirunMode.Games,
+        KeepProgressWithFailedGames = false,
         Entries = new List<MultirunEntry>(),
         CurrentIndex = -1,
         GameEntries = new List<MultirunEntry>(),

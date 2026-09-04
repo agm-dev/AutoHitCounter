@@ -131,6 +131,19 @@ public class MultirunSettingsViewModel : BaseViewModel
         }
     }
 
+    private bool _keepProgressWithFailedGames;
+
+    /// <summary>The multirun is being practised: a game that took hits no longer starts it over.</summary>
+    public bool KeepProgressWithFailedGames
+    {
+        get => _keepProgressWithFailedGames;
+        set
+        {
+            if (!SetProperty(ref _keepProgressWithFailedGames, value)) return;
+            Apply();
+        }
+    }
+
     private Game _cycleGame;
 
     public Game CycleGame
@@ -311,6 +324,7 @@ public class MultirunSettingsViewModel : BaseViewModel
 
             _isEnabled = config.Enabled;
             _isCyclesMode = config.Mode == MultirunMode.Cycles;
+            _keepProgressWithFailedGames = config.KeepProgressWithFailedGames;
             _cycleCount = config.CycleCount;
             _fontFamily = config.FontFamily;
             _fontSize = config.FontSize;
@@ -552,6 +566,7 @@ public class MultirunSettingsViewModel : BaseViewModel
         var config = _multirunService.Config.Clone();
         config.Enabled = IsEnabled;
         config.Mode = IsCyclesMode ? MultirunMode.Cycles : MultirunMode.Games;
+        config.KeepProgressWithFailedGames = KeepProgressWithFailedGames;
         config.CycleGameName = CycleGame?.GameName;
         config.CycleCount = CycleCount;
         config.FontFamily = FontFamily;

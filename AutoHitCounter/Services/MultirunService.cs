@@ -175,8 +175,9 @@ public class MultirunService : IMultirunService
             return;
         }
 
-        // Moving to another game after taking a hit is a restart of the multirun from that game.
-        if (HasHitMark)
+        // Moving to another game after taking a hit is a restart of the multirun from that game,
+        // unless the games already lost are being kept.
+        if (RestartsOnHit)
         {
             RestartFrom(index);
             return;
@@ -189,9 +190,16 @@ public class MultirunService : IMultirunService
         }
         else
         {
+            // A game abandoned with hits stays where it is, in red: a multirun being practised is
+            // simply picked back up on the spot behind it.
+            var target = _config.KeepProgressWithFailedGames && CurrentEntry?.Status == MultirunStatus.Hit
+                ? currentIndex + 1
+                : currentIndex;
+
             var entry = _config.Entries[index];
             _config.Entries.RemoveAt(index);
-            _config.Entries.Insert(currentIndex, entry);
+            _config.Entries.Insert(target, entry);
+            _config.CurrentIndex = target;
         }
 
         SaveAndPublish();
@@ -209,7 +217,7 @@ public class MultirunService : IMultirunService
 
         var index = IndexOf(_config.Entries, gameName);
         if (index < 0) return;
-        if (!HasHitMark) return;
+        if (!RestartsOnHit) return;
 
         RestartFrom(index);
     }
@@ -254,16 +262,22 @@ public class MultirunService : IMultirunService
             ? _config.Entries[_config.CurrentIndex]
             : null;
 
-    private bool HasHitMark => _config.Entries.Any(e => e.Status == MultirunStatus.Hit);
+    /// <summary>
+    /// A game marked with a hit that starts the multirun over. A multirun being practised keeps its
+    /// progress instead, so there the mark is only there to be seen on the overlay.
+    /// </summary>
+    private bool RestartsOnHit =>
+        !_config.KeepProgressWithFailedGames && _config.Entries.Any(e => e.Status == MultirunStatus.Hit);
 
     /// <summary>
     /// A reset or a new game on the game of a cycles multirun. Without a hit it is simply how the next
     /// cycle is started, so the progress is left alone; a hit (or a finished multirun) starts it over.
+    /// While the games already lost are being kept, only a finished multirun starts over.
     /// </summary>
     private void HandleCycleRestartSignal(string gameName)
     {
         if (!Matches(_config.CycleGameName, gameName)) return;
-        if (!HasHitMark && _config.CurrentIndex >= 0) return;
+        if (!RestartsOnHit && _config.CurrentIndex >= 0) return;
 
         ClearProgress();
         SaveAndPublish();

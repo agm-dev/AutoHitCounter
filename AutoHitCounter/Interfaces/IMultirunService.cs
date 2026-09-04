@@ -33,19 +33,22 @@ public interface IMultirunService
 
     /// <summary>
     /// Moves a game that is being tracked to the current position of the list and marks it as current,
-    /// or restarts the multirun from that game when any game is marked with a hit.
+    /// or restarts the multirun from that game when any game is marked with a hit. While the games
+    /// already lost are being kept, the multirun carries on instead, leaving the abandoned game behind.
     /// </summary>
     void OnGameTracked(string gameName);
 
     /// <summary>
     /// A new game was detected. Restarts the multirun from the given game when any game is marked with a hit;
     /// in a cycles multirun a clean new game is just the start of the next cycle and leaves the progress alone.
+    /// The restart never happens while the games already lost are being kept.
     /// </summary>
     void OnNewGameStarted(string gameName);
 
     /// <summary>
-    /// The run of the tracked game was reset by hand. Restarts the multirun, except in a cycles multirun with
-    /// no hit taken, where the reset is how the next cycle is started.
+    /// The run of the tracked game was reset by hand. Restarts the multirun, except in a cycles multirun where
+    /// the reset is how the next cycle is started: there it only starts over on a hit taken, and not even then
+    /// while the games already lost are being kept.
     /// </summary>
     void OnRunReset(string gameName);
 

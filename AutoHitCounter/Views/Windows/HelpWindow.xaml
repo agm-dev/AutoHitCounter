@@ -696,6 +696,9 @@
                                 With "Same game (NG cycles)": pick the game once and set how many times you are going through it, up to 20. The list fills itself in with one entry per cycle, labelled NG, NG+1, NG+2 and so on, and there is nothing to order or remove. Their abbreviations are yours to edit just the same.
                                 <LineBreak />
                                 <LineBreak />
+                                There is also a "Keep progress with failed games" tick box next to the mode, for practising: leave it off for the real thing, turn it on and a game that took hits no longer starts the multirun over. The "Practising a multirun" section below has the whole story.
+                                <LineBreak />
+                                <LineBreak />
                                 The two setups are kept apart, so switching from one mode to the other and back does not cost you the list of games you had put together.
                                 <LineBreak />
                                 <LineBreak />
@@ -777,7 +780,7 @@
                                 What changes is what comes next. You are staying on the same game, so all you do is reset the splits (or start the new game, which resets them for you if you have that turned on) and carry on into NG+1. Because there was no hit, resetting does not start the multirun over, it just gets you ready for the cycle you are already on.
                                 <LineBreak />
                                 <LineBreak />
-                                Take a hit and it works the other way round: the cycle you are on turns red, and resetting or starting a new game puts the whole multirun back to NG with every mark cleared. That is the run over, same as with a multirun of several games.
+                                Take a hit and it works the other way round: the cycle you are on turns red, and resetting or starting a new game puts the whole multirun back to NG with every mark cleared. That is the run over, same as with a multirun of several games, unless you are practising (see below), in which case the cycle simply stays red and you carry on into the next one.
                                 <LineBreak />
                                 <LineBreak />
                                 Finish the last cycle and the run is done, with the whole line green on screen. Resetting from there starts a fresh multirun back at NG.
@@ -802,6 +805,27 @@
                                 <LineBreak />
                                 <LineBreak />
                                 Once a game is marked red the multirun is over, and there are two ways to go again: start a new game on it, and the multirun restarts from that game, or track a different game of your list, and the multirun restarts from the one you just went to. Either way the list is put back in order behind it with every mark cleared.
+                            </TextBlock>
+
+                            <!-- Practising -->
+                            <TextBlock FontSize="15" FontWeight="SemiBold"
+                                       Margin="0,0,0,10">
+                                <LineBreak />
+                                Practising a multirun
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource EditorSplitsBrush}"
+                                       Margin="0,10,5,0" LineHeight="22">
+                                Everything above is for the real thing, where one hit is the end of the run. Tick "Keep progress with failed games" at the top of the multirun settings and none of those restarts happen: a game that took hits stays red and the multirun carries on to the next one, so you can practise the whole thing without starting over every time.
+                                <LineBreak />
+                                <LineBreak />
+                                The overlay reads the same as always, only now green and red sit side by side: the games you finished hitless are green, the ones that took hits are red, and the outline is on the game you are playing. It works for the cycles of one game just as well, so you can go NG, NG+1, NG+2 and see which of them cost you hits.
+                                <LineBreak />
+                                <LineBreak />
+                                Give up on a game part way through and track another one instead: the game you walked away from is left behind in red, and the one you picked up takes the spot right after it.
+                                <LineBreak />
+                                <LineBreak />
+                                To start over on purpose there is the "Reset Progress" button in the multirun settings, and in a multirun of several games resetting the run of the game you are tracking still does it. In a multirun of the cycles of one game it does not, because there a reset is how you get into the next cycle.
                             </TextBlock>
 
                             <!-- Good to know -->
